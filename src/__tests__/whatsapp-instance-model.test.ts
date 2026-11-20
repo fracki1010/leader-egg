@@ -33,7 +33,7 @@ describe('WhatsappInstance master model', () => {
 
     await expect(
       WhatsappInstance.create({ tenantId, instanceName: 'tenant-acme-2' })
-    ).rejects.toThrow(/E11000/);
+    ).rejects.toMatchObject({ code: 11000, keyPattern: { tenantId: 1 } });
   });
 
   it('enforces a unique instanceName across tenants', async () => {
@@ -44,6 +44,36 @@ describe('WhatsappInstance master model', () => {
 
     await expect(
       WhatsappInstance.create({ tenantId: new Types.ObjectId(), instanceName: 'tenant-acme' })
-    ).rejects.toThrow(/E11000/);
+    ).rejects.toMatchObject({ code: 11000, keyPattern: { instanceName: 1 } });
   });
+
+  it('does not return qrCode from a default find', async () => {
+    const tenantId = new Types.ObjectId();
+    await WhatsappInstance.create({ tenantId, instanceName: 'tenant-acme', qrCode: 'secret-qr' });
+
+    const byDefault = await WhatsappInstance.findOne({ tenantId });
+    expect(byDefault).not.toBeNull();
+    expect(byDefault?.qrCode).toBeUndefined();
+
+    const withQr = await WhatsappInstance.findOne({ tenantId }).select('+qrCode');
+    expect(withQr?.qrCode).toBe('secret-qr');
+  });
+
+  it.each(['tenant-acme', 'tenant-acme-2', 'tenant-a1-b2'])('accepts instanceName %s', async (name) => {
+    const instance = await WhatsappInstance.create({
+      tenantId: new Types.ObjectId(),
+      instanceName: name
+    });
+
+    expect(instance.instanceName).toBe(name);
+  });
+
+  it.each(['tenant-../x', 'tenant-a/b', 'tenant-a?b', 'acme'])(
+    'rejects malformed instanceName %s',
+    async (name) => {
+      await expect(
+        WhatsappInstance.create({ tenantId: new Types.ObjectId(), instanceName: name })
+      ).rejects.toMatchObject({ name: 'ValidationError' });
+    }
+  );
 });

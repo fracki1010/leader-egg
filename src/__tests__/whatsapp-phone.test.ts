@@ -59,4 +59,48 @@ describe('normalizeWhatsappSender', () => {
   it('rejects user parts that are not digits', () => {
     expect(normalizeWhatsappSender('abc@s.whatsapp.net')).toBeNull();
   });
+
+  it('strips the device suffix from replyJid', () => {
+    expect(normalizeWhatsappSender('5491112345678:12@s.whatsapp.net')?.replyJid).toBe(
+      '5491112345678@s.whatsapp.net'
+    );
+  });
+
+  it('strips the device suffix from a @lid remoteJidAlt', () => {
+    expect(normalizeWhatsappSender('123456789@lid', '5491112345678:7@s.whatsapp.net')).toEqual({
+      key: '541112345678',
+      replyJid: '5491112345678@s.whatsapp.net'
+    });
+  });
+
+  it.each([
+    ['empty string', ''],
+    ['@c.us JID', '5491112345678@c.us'],
+    ['uppercase suffix', '5491112345678@S.WHATSAPP.NET'],
+    ['uppercase device suffix', '5491112345678:AB@s.whatsapp.net'],
+    ['leading plus', '+5491112345678@s.whatsapp.net']
+  ])('returns null for invalid sender: %s', (_label, jid) => {
+    expect(normalizeWhatsappSender(jid)).toBeNull();
+  });
+
+  it('returns null for @lid with a null remoteJidAlt', () => {
+    expect(normalizeWhatsappSender('123456789@lid', null)).toBeNull();
+  });
+
+  it('rejects user parts shorter than 6 digits', () => {
+    expect(normalizeWhatsappSender('12345@s.whatsapp.net')).toBeNull();
+  });
+
+  it('accepts user parts of exactly 6 digits', () => {
+    expect(normalizeWhatsappSender('123456@s.whatsapp.net')?.key).toBe('123456');
+  });
+
+  it('accepts user parts of exactly 20 digits', () => {
+    const digits = '1'.repeat(20);
+    expect(normalizeWhatsappSender(`${digits}@s.whatsapp.net`)?.key).toBe(digits);
+  });
+
+  it('rejects user parts longer than 20 digits', () => {
+    expect(normalizeWhatsappSender(`${'1'.repeat(21)}@s.whatsapp.net`)).toBeNull();
+  });
 });
