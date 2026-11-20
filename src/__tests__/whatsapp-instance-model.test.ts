@@ -47,4 +47,16 @@ describe('WhatsappInstance master model', () => {
     ).rejects.toMatchObject({ code: 11000, keyPattern: { instanceName: 1 } });
   });
 
+  it('does not return qrCode from a default find', async () => {
+    const tenantId = new Types.ObjectId();
+    await WhatsappInstance.create({ tenantId, instanceName: 'tenant-acme', qrCode: 'secret-qr' });
+
+    const byDefault = await WhatsappInstance.findOne({ tenantId });
+    expect(byDefault).not.toBeNull();
+    expect(byDefault?.qrCode).toBeUndefined();
+
+    const withQr = await WhatsappInstance.findOne({ tenantId }).select('+qrCode');
+    expect(withQr?.qrCode).toBe('secret-qr');
+  });
+
 });
