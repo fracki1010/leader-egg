@@ -33,7 +33,7 @@ describe('WhatsappInstance master model', () => {
 
     await expect(
       WhatsappInstance.create({ tenantId, instanceName: 'tenant-acme-2' })
-    ).rejects.toThrow(/E11000/);
+    ).rejects.toMatchObject({ code: 11000, keyPattern: { tenantId: 1 } });
   });
 
   it('enforces a unique instanceName across tenants', async () => {
@@ -44,6 +44,7 @@ describe('WhatsappInstance master model', () => {
 
     await expect(
       WhatsappInstance.create({ tenantId: new Types.ObjectId(), instanceName: 'tenant-acme' })
-    ).rejects.toThrow(/E11000/);
+    ).rejects.toMatchObject({ code: 11000, keyPattern: { instanceName: 1 } });
   });
+
 });
