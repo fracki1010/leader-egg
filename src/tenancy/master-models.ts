@@ -129,7 +129,8 @@ export const whatsappInstanceSchema = new Schema<IWhatsappInstance>(
       required: true,
       unique: true,
       trim: true,
-      immutable: true
+      immutable: true,
+      match: /^tenant-[a-z0-9-]+$/
     },
     state: { type: String, enum: WHATSAPP_INSTANCE_STATES, default: 'created' },
     /** Sensitive: excluded from default queries. Read with `.select('+qrCode')`. */

@@ -59,4 +59,21 @@ describe('WhatsappInstance master model', () => {
     expect(withQr?.qrCode).toBe('secret-qr');
   });
 
+  it.each(['tenant-acme', 'tenant-acme-2', 'tenant-a1-b2'])('accepts instanceName %s', async (name) => {
+    const instance = await WhatsappInstance.create({
+      tenantId: new Types.ObjectId(),
+      instanceName: name
+    });
+
+    expect(instance.instanceName).toBe(name);
+  });
+
+  it.each(['tenant-../x', 'tenant-a/b', 'tenant-a?b', 'acme'])(
+    'rejects malformed instanceName %s',
+    async (name) => {
+      await expect(
+        WhatsappInstance.create({ tenantId: new Types.ObjectId(), instanceName: name })
+      ).rejects.toMatchObject({ name: 'ValidationError' });
+    }
+  );
 });
