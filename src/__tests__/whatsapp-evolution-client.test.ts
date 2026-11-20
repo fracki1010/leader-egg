@@ -161,7 +161,17 @@ describe('Evolution client', () => {
     });
   });
 
-  it('refuses to build a client from env when WhatsApp is not configured', () => {
-    expect(() => getEvolutionClient()).toThrow(AppError);
+  it('refuses to build a client from env when WhatsApp is not configured', async () => {
+    // Re-import under a disabled flag so the result does not depend on the
+    // caller's environment.
+    vi.stubEnv('WHATSAPP_ENABLED', 'false');
+    vi.stubEnv('EVOLUTION_URL', '');
+    vi.stubEnv('EVOLUTION_API_KEY', '');
+    vi.resetModules();
+
+    const fresh = await import('../modules/whatsapp/evolution-client.js');
+    expect(() => fresh.getEvolutionClient()).toThrow('WhatsApp is not configured');
+
+    vi.unstubAllEnvs();
   });
 });
