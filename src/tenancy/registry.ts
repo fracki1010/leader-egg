@@ -18,6 +18,12 @@ import { returnSchema } from '../modules/returns/model.js';
 import { routeSchema } from '../modules/routes/model.js';
 import { supplierSchema } from '../modules/suppliers/model.js';
 import { vehicleSchema } from '../modules/vehicles/model.js';
+import {
+  allowedNumberSchema,
+  conversationSchema,
+  inboundEventSchema,
+  messageSchema
+} from '../modules/whatsapp/model.js';
 
 interface ModelRegistration {
   name: string;
@@ -46,7 +52,11 @@ const REGISTRATIONS: ModelRegistration[] = [
   { name: 'Return', schema: returnSchema },
   { name: 'Route', schema: routeSchema },
   { name: 'Supplier', schema: supplierSchema },
-  { name: 'Vehicle', schema: vehicleSchema }
+  { name: 'Vehicle', schema: vehicleSchema },
+  { name: 'WhatsappAllowedNumber', schema: allowedNumberSchema },
+  { name: 'WhatsappConversation', schema: conversationSchema },
+  { name: 'WhatsappMessage', schema: messageSchema },
+  { name: 'WhatsappInboundEvent', schema: inboundEventSchema }
 ];
 
 /** Model names registered on every tenant connection. */
