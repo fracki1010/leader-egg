@@ -1,7 +1,7 @@
 import { AppError } from '../../middleware/error-handler.js';
 import { Customer, type AddressDetail, type CustomerStatus, type CustomerType, type ICustomer } from './model.js';
 import { Order, type IOrder, type OrderStatus } from '../orders/model.js';
-import { getCustomerOutstanding } from '../orders/creditService.js';
+import { getCustomerOutstanding } from '../orders/credit-service.js';
 import type { CreateCustomerInput, UpdateCustomerInput } from './schema.js';
 
 /**

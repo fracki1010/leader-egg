@@ -10,7 +10,7 @@ import {
   deleteOrder,
   getTodayOrders
 } from './service.js';
-import { getCustomerOutstanding } from './creditService.js';
+import { getCustomerOutstanding } from './credit-service.js';
 import { createOrderSchema, transitionStatusSchema, updateOrderSchema, listOrdersQuerySchema } from './schema.js';
 import type { OrderStatus } from './model.js';
 import { Order } from './model.js';
