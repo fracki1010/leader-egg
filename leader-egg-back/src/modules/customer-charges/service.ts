@@ -9,7 +9,7 @@ import type { CreateCustomerChargeInput } from './schema.js';
  * CustomerCharge: +amount for 'charge', −amount for 'credit'.
  *
  * This is the SINGLE source of the manual-debt balance term — every balance
- * read site (dashboard, accounts, creditService) reuses it so the semantics
+ * read site (dashboard, accounts, credit-service) reuses it so the semantics
  * can never drift apart.
  */
 export const CUSTOMER_CHARGE_SIGNED_DELTA: Record<string, unknown> = {

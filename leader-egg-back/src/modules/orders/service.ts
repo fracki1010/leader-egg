@@ -14,7 +14,7 @@ import { CashAdjustment } from '../cash-adjustments/model.js';
 import { CustomerCharge } from '../customer-charges/model.js';
 import type { CreateOrderInput, UpdateOrderInput, CancelMoneyAction } from './schema.js';
 import { getNextOrderNumber } from '../counters/model.js';
-import { computeDueDate, checkCreditLimit, getCustomerOutstanding } from './creditService.js';
+import { computeDueDate, checkCreditLimit, getCustomerOutstanding } from './credit-service.js';
 import { calendarComponents, startOfCalendarDay, endOfCalendarDay } from '../../utils/calendar-day.js';
 import {
   buildDuplicateFingerprint,

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Types } from 'mongoose';
 import { startTestDatabase, stopTestDatabase, clearDatabase, createCreditCustomer, createTestCustomer, seedProducts, getProductIds } from './helpers.js';
-import { computeDueDate, checkCreditLimit, getCustomerOutstanding } from '../modules/orders/creditService.js';
+import { computeDueDate, checkCreditLimit, getCustomerOutstanding } from '../modules/orders/credit-service.js';
 import { Order } from '../modules/orders/model.js';
 import { CustomerCharge } from '../modules/customer-charges/model.js';
 

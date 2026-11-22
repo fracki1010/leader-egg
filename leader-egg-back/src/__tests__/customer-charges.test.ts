@@ -87,7 +87,7 @@ describe('Customer charges — manual debt (cuenta corriente)', () => {
     expect(body.source).toBe('manual');
     expect(body.customerId).toBe(customerId);
 
-    // creditService / customer outstanding includes the manual term.
+    // credit-service / customer outstanding includes the manual term.
     const outstanding = await request
       .get(`/api/v1/orders/customers/${customerId}/outstanding`)
       .set('Authorization', auth(adminToken))
