@@ -85,9 +85,69 @@ export const platformAdminSchema = new Schema<IPlatformAdmin>(
   { timestamps: true }
 );
 
+// ── WhatsApp instance routing ────────────────────────────────────────────────
+
+export const WHATSAPP_INSTANCE_STATES = [
+  'created',
+  'connecting',
+  'open',
+  'close',
+  'unknown'
+] as const;
+
+export type WhatsappInstanceState = (typeof WHATSAPP_INSTANCE_STATES)[number];
+
+export interface IWhatsappInstance extends Document {
+  /** Owning tenant. One WhatsApp instance per tenant. */
+  tenantId: Types.ObjectId;
+  /** Evolution instance name (`tenant-${slug}`). Unique and immutable. */
+  instanceName: string;
+  state: WhatsappInstanceState;
+  qrCode?: string | null;
+  qrUpdatedAt?: Date | null;
+  stateUpdatedAt: Date;
+  lastEventAt?: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Routing record for the WhatsApp webhook. It lives in the master DB so an
+ * incoming delivery can resolve its tenant before any tenant scope exists.
+ * Webhook events update this document only; they never touch tenant data.
+ */
+export const whatsappInstanceSchema = new Schema<IWhatsappInstance>(
+  {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      unique: true
+    },
+    instanceName: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      immutable: true
+    },
+    state: { type: String, enum: WHATSAPP_INSTANCE_STATES, default: 'created' },
+    qrCode: { type: String, default: null },
+    qrUpdatedAt: { type: Date, default: null },
+    stateUpdatedAt: { type: Date, default: Date.now },
+    lastEventAt: { type: Date, default: null }
+  },
+  { timestamps: true }
+);
+
 // ── Platform-bound models ────────────────────────────────────────────────────
 
 export const Tenant = createResolvedModel<ITenant>('Tenant', tenantSchema, getMasterConnection);
+export const WhatsappInstance = createResolvedModel<IWhatsappInstance>(
+  'WhatsappInstance',
+  whatsappInstanceSchema,
+  getMasterConnection
+);
 export const EmailIndex = createResolvedModel<IEmailIndex>(
   'EmailIndex',
   emailIndexSchema,
