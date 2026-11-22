@@ -25,6 +25,7 @@ import { dailyCloseRouter } from '../modules/daily-closes/routes.js';
 import { vehicleRouter } from '../modules/vehicles/routes.js';
 import { platformRouter } from '../modules/platform/routes.js';
 import { agentRouter } from '../modules/agent/routes.js';
+import { whatsappRouter } from '../modules/whatsapp/routes.js';
 
 export const router = Router();
 
@@ -67,3 +68,4 @@ router.use('/v1/daily-closes', dailyCloseRouter);
 router.use('/v1/vehicles', vehicleRouter);
 router.use('/v1/platform', platformRouter);
 router.use('/v1/agent', agentRouter);
+router.use('/v1/whatsapp', whatsappRouter);

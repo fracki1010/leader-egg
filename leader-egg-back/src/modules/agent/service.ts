@@ -9,6 +9,7 @@ import {
   type IAgentToolCallSummary
 } from './model.js';
 import { toActionView, type AgentActionView } from './actions.js';
+import { buildDateContext } from './date-context.js';
 import {
   callProvider,
   isAgentEnabled,
@@ -29,7 +30,6 @@ import { executeTool, toProviderTools, type AgentToolContext } from './tools.js'
 const MAX_ROUNDS = 5;
 const MAX_STATE_MESSAGES = 50;
 const MAX_STATE_ACTIONS = 50;
-const ART_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
 export interface AgentChatResult {
   reply: string;
@@ -52,17 +52,16 @@ export interface AgentChatState {
   rateLimitPerHour: number;
 }
 
-const buildSystemPrompt = (): string => {
-  const now = new Intl.DateTimeFormat('es-AR', {
-    timeZone: ART_TIMEZONE,
-    dateStyle: 'full',
-    timeStyle: 'short'
-  }).format(new Date());
+/** Built on every turn so relative dates ("hoy", "mañana") are never stale. */
+export const buildSystemPrompt = (now: Date = new Date()): string => {
+  const dates = buildDateContext(now);
 
   return `Sos el asistente administrativo de "El Huevo Líder", una distribuidora de huevos.
-Hoy es ${now} (zona horaria America/Argentina/Buenos_Aires).
+Hoy es ${dates.isoDate} (zona horaria ${dates.timezone}). Hora local: ${dates.localDateTime}.
+Mañana es ${dates.tomorrowIsoDate}.
 
 Reglas:
+- Para "hoy" y "mañana" usá exactamente las fechas de arriba en formato YYYY-MM-DD. Si el usuario no indica fecha, no inventes una.
 - Usá siempre las herramientas para obtener datos. Nunca inventes números, clientes, órdenes ni stock.
 - Si una herramienta devuelve un error o no tenés permiso, decilo con claridad y no supongas valores.
 - Podés PREPARAR acciones (pedido, pago, cliente y cambio de estado de pedido) pero NO las ejecutás. Después de prepararlas, decile al usuario que confirme la tarjeta. Nunca digas que algo quedó creado o cambiado hasta que esté confirmado.
