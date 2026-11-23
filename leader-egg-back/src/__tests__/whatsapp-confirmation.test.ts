@@ -98,6 +98,49 @@ describe('handleDecision', () => {
     expect(reply).toBe('Pago registrado.');
   });
 
+  it('does not confirm an action that is no longer pending', async () => {
+    await inTenant(() =>
+      AgentPendingAction.create({
+        userId: USER_ID,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'register_payment',
+        payload: {},
+        preview: 'Cobro ya confirmado',
+        channelChatId: CHAT,
+        status: 'confirmed',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: inFiveMinutes()
+      })
+    );
+
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
+
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(reply).toBe('No hay nada para confirmar.');
+  });
+
+  it('does not confirm another user\'s action in the same chat', async () => {
+    await inTenant(() =>
+      AgentPendingAction.create({
+        userId: new Types.ObjectId(),
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'register_payment',
+        payload: {},
+        preview: 'Cobro de otro usuario',
+        channelChatId: CHAT,
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: inFiveMinutes()
+      })
+    );
+
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
+
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(reply).toBe('No hay nada para confirmar.');
+  });
+
   it('does not confirm an action prepared in the app, from WhatsApp', async () => {
     await seedPending('Cobro de $100', inFiveMinutes(), new Date(), null);
 
