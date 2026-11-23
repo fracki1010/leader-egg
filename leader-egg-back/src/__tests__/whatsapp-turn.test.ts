@@ -120,6 +120,7 @@ describe('WhatsApp turn: text in, reply out', () => {
         type: 'register_payment',
         payload: {},
         preview: 'Cobro de $100',
+        channelChatId: LINKED_JID,
         idempotencyKey: new Types.ObjectId().toString(),
         expiresAt: new Date(Date.now() + 5 * 60 * 1000)
       });

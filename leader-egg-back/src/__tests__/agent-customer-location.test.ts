@@ -11,6 +11,7 @@ import {
   confirmAction,
   prepareCustomerLocationAction
 } from '../modules/agent/actions.js';
+import { runInWhatsappChat } from '../modules/agent/channel-context.js';
 
 const USER_ID = new Types.ObjectId();
 const ctx = {
@@ -53,6 +54,22 @@ describe('agent: set_customer_location', () => {
     });
     const stored = await inTenant(() => Customer.findById(customer._id));
     expect(stored?.location).toBeUndefined();
+  });
+
+  it('records the WhatsApp chat that prepared the action, and null outside WhatsApp', async () => {
+    await inTenant(() => Customer.create({ name: 'Rosa Vidal', type: 'B2C', phone: '3', address: 'E' }));
+
+    await inTenant(() =>
+      runInWhatsappChat('5491155550077@s.whatsapp.net', () =>
+        prepareCustomerLocationAction({ customerName: 'Rosa Vidal', lat: -34.6, lng: -58.4 }, ctx)
+      )
+    );
+    await inTenant(() => prepareCustomerLocationAction({ customerName: 'Rosa Vidal', lat: -34.6, lng: -58.4 }, ctx));
+
+    const actions = await inTenant(() =>
+      AgentPendingAction.find({ type: 'set_customer_location' }).sort({ createdAt: 1 })
+    );
+    expect(actions.map((a) => a.channelChatId)).toEqual(['5491155550077@s.whatsapp.net', null]);
   });
 
   it('refuses a customer name that does not exist', async () => {

@@ -78,6 +78,8 @@ export interface IAgentPendingAction extends Document {
   payload: Record<string, unknown>;
   /** Spanish, human-readable summary of what the user is approving. */
   preview: string;
+  /** WhatsApp chat that prepared the action; null when prepared in the app. */
+  channelChatId: string | null;
   status: AgentPendingActionStatus;
   idempotencyKey: string;
   resultSummary?: string;
@@ -180,6 +182,7 @@ const agentPendingActionSchema = new Schema<IAgentPendingAction>(
     },
     payload: { type: Schema.Types.Mixed, required: true },
     preview: { type: String, required: true },
+    channelChatId: { type: String, default: null },
     status: {
       type: String,
       required: true,

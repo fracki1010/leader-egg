@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { currentWhatsappChat } from './channel-context.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AppError, DuplicateRecordError, InsufficientStockError } from '../../middleware/error-handler.js';
@@ -235,6 +236,7 @@ const storePendingAction = async (
     type,
     payload,
     preview,
+    channelChatId: currentWhatsappChat(),
     status: 'pending',
     idempotencyKey: randomUUID(),
     expiresAt

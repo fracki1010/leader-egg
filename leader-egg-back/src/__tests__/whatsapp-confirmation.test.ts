@@ -17,6 +17,8 @@ vi.mock('../modules/agent/actions.js', async (importOriginal) => ({
 
 const USER_ID = new Types.ObjectId();
 const caller = { userId: String(USER_ID), role: 'admin', permissions: ['orders.manage'] };
+const CHAT = '5491155550099@s.whatsapp.net';
+const OTHER_CHAT = '5491155550088@s.whatsapp.net';
 const inFiveMinutes = () => new Date(Date.now() + 5 * 60 * 1000);
 const tenDaysAgo = () => new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
 
@@ -55,7 +57,7 @@ describe('handleDecision', () => {
     return runWithTenancy({ connection, tenantId: String(tenant!._id) }, fn);
   };
 
-  const seedPending = (preview: string, expiresAt: Date, createdAt = new Date()) =>
+  const seedPending = (preview: string, expiresAt: Date, createdAt = new Date(), channelChatId: string | null = CHAT) =>
     inTenant(() =>
       AgentPendingAction.create({
         userId: USER_ID,
@@ -64,6 +66,7 @@ describe('handleDecision', () => {
         type: 'register_payment',
         payload: {},
         preview,
+        channelChatId,
         idempotencyKey: new Types.ObjectId().toString(),
         expiresAt,
         createdAt
@@ -71,15 +74,33 @@ describe('handleDecision', () => {
     );
 
   it('says there is nothing to confirm when nothing is pending, and confirms nothing', async () => {
-    expect(await inTenant(() => handleDecision(caller, 'yes'))).toBe('No hay nada para confirmar.');
+    expect(await inTenant(() => handleDecision(caller, 'yes', CHAT))).toBe('No hay nada para confirmar.');
     expect(confirmAction).not.toHaveBeenCalled();
     expect(cancelAction).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm an action prepared in another chat', async () => {
+    await seedPending('Cobro de $100', inFiveMinutes(), new Date(), OTHER_CHAT);
+
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
+
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(reply).toBe('No hay nada para confirmar.');
+  });
+
+  it('does not confirm an action prepared in the app, from WhatsApp', async () => {
+    await seedPending('Cobro de $100', inFiveMinutes(), new Date(), null);
+
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
+
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(reply).toBe('No hay nada para confirmar.');
   });
 
   it('confirms the single live pending action on sí', async () => {
     const action = await seedPending('Cobro de $100', inFiveMinutes());
 
-    const reply = await inTenant(() => handleDecision(caller, 'yes'));
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
 
     expect(confirmAction).toHaveBeenCalledWith(caller.userId, 'admin', ['orders.manage'], String(action._id));
     expect(reply).toBe('Pago registrado.');
@@ -88,7 +109,7 @@ describe('handleDecision', () => {
   it('cancels the single live pending action on no', async () => {
     const action = await seedPending('Cobro de $100', inFiveMinutes());
 
-    const reply = await inTenant(() => handleDecision(caller, 'no'));
+    const reply = await inTenant(() => handleDecision(caller, 'no', CHAT));
 
     expect(cancelAction).toHaveBeenCalledWith(caller.userId, String(action._id));
     expect(confirmAction).not.toHaveBeenCalled();
@@ -99,7 +120,7 @@ describe('handleDecision', () => {
     await seedPending('Cobro de $100', inFiveMinutes());
     await seedPending('Cobro de $250', inFiveMinutes());
 
-    const reply = await inTenant(() => handleDecision(caller, 'yes'));
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
 
     expect(confirmAction).not.toHaveBeenCalled();
     expect(reply).toContain('2 acciones pendientes');
@@ -111,7 +132,7 @@ describe('handleDecision', () => {
     await seedPending('Cobro de $100', tenDaysAgo());
     vi.mocked(confirmAction).mockRejectedValueOnce(new AppError('La acción expiró', 410));
 
-    const reply = await inTenant(() => handleDecision(caller, 'yes'));
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
 
     expect(reply).toBe('La acción expiró');
   });

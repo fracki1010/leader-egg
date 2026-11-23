@@ -2,6 +2,7 @@ import { chat } from '../agent/service.js';
 import { User } from '../auth/model.js';
 import { getEvolutionClient } from './evolution-client.js';
 import { handleDecision, parseDecision } from './confirmation.js';
+import { runInWhatsappChat } from '../agent/channel-context.js';
 
 /**
  * Turn for inbound WhatsApp messages.
@@ -33,23 +34,25 @@ export interface WhatsappTurnInput {
  * The agent's answer to a text, or null when the sender has no user.
  *
  * A text or a voice note whose transcription is exactly "sí" or "no" confirms or
- * cancels the pending action, as the spec approved. Anything else goes to the agent.
+ * cancels the pending action of this chat, as the spec approved. Anything else goes
+ * to the agent. Actions prepared during the turn remember this chat.
  */
-const answerText = async (input: WhatsappTurnInput, text: string): Promise<string | null> => {
-  try {
-    const user = await User.findById(input.userId).select('name role permissions');
-    if (!user) return null;
+const answerText = (input: WhatsappTurnInput, text: string): Promise<string | null> =>
+  runInWhatsappChat(input.replyJid, async () => {
+    try {
+      const user = await User.findById(input.userId).select('name role permissions');
+      if (!user) return null;
 
-    const caller = { userId: input.userId, role: user.role, permissions: user.permissions ?? [] };
-    const decision = parseDecision(text);
-    if (decision) return await handleDecision(caller, decision);
+      const caller = { userId: input.userId, role: user.role, permissions: user.permissions ?? [] };
+      const decision = parseDecision(text);
+      if (decision) return await handleDecision(caller, decision, input.replyJid);
 
-    return (await chat(input.userId, user.name, caller.permissions, text)).reply;
-  } catch {
-    // The user is told the turn failed; nothing is written on this path.
-    return FAILURE_REPLY;
-  }
-};
+      return (await chat(input.userId, user.name, caller.permissions, text)).reply;
+    } catch {
+      // The user is told the turn failed; nothing is written on this path.
+      return FAILURE_REPLY;
+    }
+  });
 
 export const runWhatsappTurn = async (input: WhatsappTurnInput): Promise<void> => {
   const evolution = getEvolutionClient();
