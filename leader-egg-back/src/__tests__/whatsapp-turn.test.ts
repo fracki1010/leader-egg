@@ -15,11 +15,19 @@ import { User } from '../modules/auth/model.js';
 import { WhatsappAllowedNumber } from '../modules/whatsapp/model.js';
 import { waitForIdle } from '../modules/whatsapp/queue.js';
 import { chat } from '../modules/agent/service.js';
+import { AgentPendingAction } from '../modules/agent/model.js';
+import { confirmAction } from '../modules/agent/actions.js';
+import { Types } from 'mongoose';
 
 const sendText = vi.hoisted(() => vi.fn(async () => ({})));
 
 vi.mock('../modules/agent/service.js', () => ({
   chat: vi.fn(async () => ({ reply: 'Hay 3 pedidos hoy.', toolCalls: [], actions: [] }))
+}));
+
+vi.mock('../modules/agent/actions.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../modules/agent/actions.js')>()),
+  confirmAction: vi.fn(async () => ({ resultSummary: 'Pago registrado.' }))
 }));
 
 vi.mock('../modules/whatsapp/evolution-client.js', () => ({
@@ -98,6 +106,34 @@ describe('WhatsApp turn: text in, reply out', () => {
       number: LINKED_JID,
       text: 'Hay 3 pedidos hoy.'
     });
+  });
+
+  it('confirms the pending action when the user types "sí", without the agent', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const connection = getTenantConnection(tenant!.dbName);
+    const action = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, async () => {
+      const user = await User.findOne({ email: 'equipo@test.com' });
+      return AgentPendingAction.create({
+        userId: user!._id,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'register_payment',
+        payload: {},
+        preview: 'Cobro de $100',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      });
+    });
+
+    await request
+      .post(WEBHOOK_PATH)
+      .set('x-webhook-secret', SECRET)
+      .send(textUpsert(LINKED_JID, 'sí', 'MSG-YES'));
+    await waitForIdle();
+
+    expect(confirmAction).toHaveBeenCalledWith(expect.any(String), 'admin', ['orders.manage'], String(action._id));
+    expect(chat).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: 'Pago registrado.' });
   });
 
   it('tells the user when the agent fails, and writes nothing', async () => {

@@ -32,8 +32,8 @@ export interface WhatsappTurnInput {
 /**
  * The agent's answer to a text, or null when the sender has no user.
  *
- * Only typed text can confirm or cancel. A voice note's transcription is a guess
- * at what was said, so it always goes to the agent as a message.
+ * A text or a voice note whose transcription is exactly "sí" or "no" confirms or
+ * cancels the pending action, as the spec approved. Anything else goes to the agent.
  */
 const answerText = async (input: WhatsappTurnInput, text: string): Promise<string | null> => {
   try {
@@ -41,7 +41,7 @@ const answerText = async (input: WhatsappTurnInput, text: string): Promise<strin
     if (!user) return null;
 
     const caller = { userId: input.userId, role: user.role, permissions: user.permissions ?? [] };
-    const decision = input.kind === 'text' ? parseDecision(text) : null;
+    const decision = parseDecision(text);
     if (decision) return await handleDecision(caller, decision);
 
     return (await chat(input.userId, user.name, caller.permissions, text)).reply;

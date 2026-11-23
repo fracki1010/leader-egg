@@ -12,6 +12,7 @@ import { waitForIdle } from '../modules/whatsapp/queue.js';
 import { chat } from '../modules/agent/service.js';
 import { AgentPendingAction } from '../modules/agent/model.js';
 import { MAX_AUDIO_BYTES } from '../modules/whatsapp/media.js';
+import { confirmAction } from '../modules/agent/actions.js';
 import { Types } from 'mongoose';
 
 const evolution = vi.hoisted(() => ({
@@ -21,6 +22,11 @@ const evolution = vi.hoisted(() => ({
 
 vi.mock('../modules/agent/service.js', () => ({
   chat: vi.fn(async () => ({ reply: 'Hay 3 pedidos hoy.', toolCalls: [], actions: [] }))
+}));
+
+vi.mock('../modules/agent/actions.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../modules/agent/actions.js')>()),
+  confirmAction: vi.fn(async () => ({ resultSummary: 'Pago registrado.' }))
 }));
 
 vi.mock('../modules/whatsapp/evolution-client.js', () => ({
@@ -174,7 +180,7 @@ describe('WhatsApp voice notes: download, transcribe, answer', () => {
     expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: AUDIO_FAILURE });
   });
 
-  it('sends a spoken "sí" to the agent and never confirms a pending action with it', async () => {
+  it('confirms the pending action when the voice note says exactly "sí"', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
     const connection = getTenantConnection(tenant!.dbName);
     const action = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, async () => {
@@ -195,10 +201,21 @@ describe('WhatsApp voice notes: download, transcribe, answer', () => {
     await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
     await waitForIdle();
 
-    expect(chat).toHaveBeenCalledWith(expect.any(String), 'Equipo', ['orders.manage'], 'sí');
-    const stored = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, () =>
-      AgentPendingAction.findById(action._id)
-    );
-    expect(stored?.status).toBe('pending');
+    expect(confirmAction).toHaveBeenCalledWith(expect.any(String), 'admin', ['orders.manage'], String(action._id));
+    expect(chat).not.toHaveBeenCalled();
+    expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, {
+      number: LINKED_JID,
+      text: 'Pago registrado.'
+    });
+  });
+
+  it('accepts an audio file in a format other than ogg', async () => {
+    evolution.getBase64FromMedia.mockResolvedValueOnce({ base64: 'T1BVU0VS', mimetype: 'audio/mpeg' });
+
+    await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
+    await waitForIdle();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('/audio/transcriptions'), expect.anything());
+    expect(chat).toHaveBeenCalledWith(expect.any(String), 'Equipo', ['orders.manage'], 'cuántos pedidos hay hoy');
   });
 });
