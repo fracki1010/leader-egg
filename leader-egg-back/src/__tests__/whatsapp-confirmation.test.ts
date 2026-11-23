@@ -70,9 +70,10 @@ describe('handleDecision', () => {
       })
     );
 
-  it('returns null when nothing is pending, so the text goes to the agent', async () => {
-    expect(await inTenant(() => handleDecision(caller, 'yes'))).toBeNull();
+  it('says there is nothing to confirm when nothing is pending, and confirms nothing', async () => {
+    expect(await inTenant(() => handleDecision(caller, 'yes'))).toBe('No hay nada para confirmar.');
     expect(confirmAction).not.toHaveBeenCalled();
+    expect(cancelAction).not.toHaveBeenCalled();
   });
 
   it('confirms the single live pending action on sí', async () => {

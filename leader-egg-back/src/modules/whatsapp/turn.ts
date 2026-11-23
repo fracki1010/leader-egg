@@ -29,17 +29,22 @@ export interface WhatsappTurnInput {
   location?: { lat: number; lng: number };
 }
 
-/** The agent's answer to a text, or null when the sender has no user. */
+/**
+ * The agent's answer to a text, or null when the sender has no user.
+ *
+ * Only typed text can confirm or cancel. A voice note's transcription is a guess
+ * at what was said, so it always goes to the agent as a message.
+ */
 const answerText = async (input: WhatsappTurnInput, text: string): Promise<string | null> => {
   try {
     const user = await User.findById(input.userId).select('name role permissions');
     if (!user) return null;
 
     const caller = { userId: input.userId, role: user.role, permissions: user.permissions ?? [] };
-    const decision = parseDecision(text);
-    const decisionReply = decision ? await handleDecision(caller, decision) : null;
+    const decision = input.kind === 'text' ? parseDecision(text) : null;
+    if (decision) return await handleDecision(caller, decision);
 
-    return decisionReply ?? (await chat(input.userId, user.name, caller.permissions, text)).reply;
+    return (await chat(input.userId, user.name, caller.permissions, text)).reply;
   } catch {
     // The user is told the turn failed; nothing is written on this path.
     return FAILURE_REPLY;

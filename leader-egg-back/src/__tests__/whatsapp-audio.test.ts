@@ -10,6 +10,9 @@ import { User } from '../modules/auth/model.js';
 import { WhatsappAllowedNumber } from '../modules/whatsapp/model.js';
 import { waitForIdle } from '../modules/whatsapp/queue.js';
 import { chat } from '../modules/agent/service.js';
+import { AgentPendingAction } from '../modules/agent/model.js';
+import { MAX_AUDIO_BYTES } from '../modules/whatsapp/media.js';
+import { Types } from 'mongoose';
 
 const evolution = vi.hoisted(() => ({
   sendText: vi.fn(async () => ({})),
@@ -134,5 +137,68 @@ describe('WhatsApp voice notes: download, transcribe, answer', () => {
 
     expect(chat).not.toHaveBeenCalled();
     expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: AUDIO_FAILURE });
+  });
+
+  it('asks the user to repeat when the transcription is empty', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ text: '   ' }), { status: 200 }));
+
+    await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
+    await waitForIdle();
+
+    expect(chat).not.toHaveBeenCalled();
+    expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: AUDIO_FAILURE });
+  });
+
+  it('refuses a voice note that is too large, without downloading it to Groq', async () => {
+    evolution.getBase64FromMedia.mockResolvedValueOnce({
+      base64: 'A'.repeat(Math.ceil((MAX_AUDIO_BYTES * 4) / 3) + 4),
+      mimetype: 'audio/ogg'
+    });
+
+    await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
+    await waitForIdle();
+
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(chat).not.toHaveBeenCalled();
+    expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: AUDIO_FAILURE });
+  });
+
+  it('refuses media that is not audio', async () => {
+    evolution.getBase64FromMedia.mockResolvedValueOnce({ base64: 'T1BVU0VS', mimetype: 'video/mp4' });
+
+    await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
+    await waitForIdle();
+
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(chat).not.toHaveBeenCalled();
+    expect(evolution.sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: AUDIO_FAILURE });
+  });
+
+  it('sends a spoken "sí" to the agent and never confirms a pending action with it', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const connection = getTenantConnection(tenant!.dbName);
+    const action = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, async () => {
+      const user = await User.findOne({ email: 'audio@test.com' });
+      return AgentPendingAction.create({
+        userId: user!._id,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'register_payment',
+        payload: {},
+        preview: 'Cobro de $100',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      });
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ text: 'sí' }), { status: 200 }));
+
+    await request.post(WEBHOOK_PATH).set('x-webhook-secret', SECRET).send(audioUpsert);
+    await waitForIdle();
+
+    expect(chat).toHaveBeenCalledWith(expect.any(String), 'Equipo', ['orders.manage'], 'sí');
+    const stored = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, () =>
+      AgentPendingAction.findById(action._id)
+    );
+    expect(stored?.status).toBe('pending');
   });
 });

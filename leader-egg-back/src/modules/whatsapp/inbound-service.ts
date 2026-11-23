@@ -61,10 +61,10 @@ export const handleInbound = async (
     } satisfies Omit<WhatsappTurnInput, 'kind'>;
 
     if (inbound.kind === 'audio') {
-      try {
-        const text = await transcribeAudio(instance.instanceName, inbound.messageKey);
+      const text = await transcribeAudio(instance.instanceName, inbound.messageKey).catch(() => '');
+      if (text.trim()) {
         await runWhatsappTurn({ ...base, kind: 'audio', text });
-      } catch {
+      } else {
         await getEvolutionClient().sendText(instance.instanceName, {
           number: inbound.replyJid,
           text: AUDIO_FAILURE_REPLY

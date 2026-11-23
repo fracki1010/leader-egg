@@ -30,17 +30,15 @@ export const parseDecision = (text: string): Decision | null => {
   return null;
 };
 
+const NOTHING_PENDING_REPLY = 'No hay nada para confirmar.';
+
 /**
- * Applies a decision to the caller's pending action.
+ * Applies a decision to the caller's pending action and returns the reply.
  *
- * Returns null when nothing is pending, so the text goes to the agent as a normal
- * message. Returns the reply otherwise. With more than one live pending action it
- * confirms nothing and lists them.
+ * With nothing pending it says so and confirms nothing. With more than one live
+ * pending action it confirms nothing either and lists them.
  */
-export const handleDecision = async (
-  caller: DecisionCaller,
-  decision: Decision
-): Promise<string | null> => {
+export const handleDecision = async (caller: DecisionCaller, decision: Decision): Promise<string> => {
   const now = new Date();
   const pending = await AgentPendingAction.find({ userId: caller.userId, status: 'pending' }).sort({
     createdAt: -1
@@ -48,7 +46,7 @@ export const handleDecision = async (
   const live = pending.filter((action) => action.expiresAt > now);
   const candidates = live.length > 0 ? live : pending.slice(0, 1);
   const [only] = candidates;
-  if (!only) return null;
+  if (!only) return NOTHING_PENDING_REPLY;
 
   if (candidates.length > 1) {
     const list = candidates.map((action) => `- ${action.preview}`).join('\n');
