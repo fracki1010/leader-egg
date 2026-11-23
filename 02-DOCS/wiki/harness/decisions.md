@@ -40,6 +40,14 @@
 - **Gaps accepted:** rules without a check are listed in each section of `02-DOCS/wiki/sdd/constitution.md`.
 - **Source:** `02-DOCS/wiki/sdd/constitution.md`, amendment log row v1.0.0; `REVIEW.md`.
 
+## 2026-11-22 — Unlock `main` for direct commits
+
+- **Options:** (a) keep `main` closed and use a branch and PR for each change; (b) unlock `main` with the project switch `.rsc/.no-trunk-guard`.
+- **Chosen:** (b), at the owner's request.
+- **Why:** the owner decides the flow for this project. The switch is the rsc mechanism for it; the lock file `.rsc/.no-trunk-open` is unchanged.
+- **Result:** commit `3c74200` (npm audit fixes and the switch) went straight to `main`. Constitution section 4, rule 1 changed in v1.1.0.
+- **Limit:** `pre-push` still runs the backend tests; there is no server-side check.
+
 ## 2026-11-22 — Merge commits for pull requests
 
 - **Options:** merge commit, squash, rebase.

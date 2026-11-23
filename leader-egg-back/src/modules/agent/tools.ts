@@ -12,6 +12,9 @@ import { toCalendarDateString } from '../../utils/calendar-day.js';
 import {
   prepareCustomerAction,
   prepareCustomerArgsSchema,
+  prepareCustomerLocationAction,
+  prepareCustomerLocationArgsSchema,
+  type PrepareCustomerLocationArgs,
   prepareOrderAction,
   prepareOrderArgsSchema,
   prepareOrderStatusAction,
@@ -670,6 +673,28 @@ const prepareCustomerTool: AgentTool = {
     prepareCustomerAction(rawArgs as PrepareCustomerArgs, ctx)
 };
 
+const prepareCustomerLocationTool: AgentTool = {
+  name: 'prepare_customer_location',
+  description:
+    'PREPARA guardar la ubicación (coordenadas) de un cliente que ya existe. No la guarda: el usuario confirma la tarjeta. Usa el nombre exacto del cliente.',
+  permission: 'customers.manage',
+  topic: 'los clientes',
+  label: 'Ubicación preparada',
+  parameters: {
+    type: 'object',
+    properties: {
+      customerName: { type: 'string', description: 'Nombre exacto del cliente' },
+      lat: { type: 'number', minimum: -90, maximum: 90, description: 'Latitud' },
+      lng: { type: 'number', minimum: -180, maximum: 180, description: 'Longitud' }
+    },
+    required: ['customerName', 'lat', 'lng'],
+    additionalProperties: false
+  },
+  schema: prepareCustomerLocationArgsSchema,
+  execute: async (rawArgs, ctx) =>
+    prepareCustomerLocationAction(rawArgs as PrepareCustomerLocationArgs, ctx)
+};
+
 export const AGENT_TOOLS: AgentTool[] = [
   getDashboardOverview,
   getSalesReport,
@@ -685,7 +710,8 @@ export const AGENT_TOOLS: AgentTool[] = [
   prepareOrderTool,
   preparePaymentTool,
   prepareOrderStatusTool,
-  prepareCustomerTool
+  prepareCustomerTool,
+  prepareCustomerLocationTool
 ];
 
 export const findTool = (name: string): AgentTool | undefined =>

@@ -51,7 +51,8 @@ export type AgentPendingActionType =
   | 'create_order'
   | 'register_payment'
   | 'create_customer'
-  | 'change_order_status';
+  | 'change_order_status'
+  | 'set_customer_location';
 
 export type AgentPendingActionStatus =
   | 'pending'
@@ -169,7 +170,13 @@ const agentPendingActionSchema = new Schema<IAgentPendingAction>(
     type: {
       type: String,
       required: true,
-      enum: ['create_order', 'register_payment', 'create_customer', 'change_order_status']
+      enum: [
+        'create_order',
+        'register_payment',
+        'create_customer',
+        'change_order_status',
+        'set_customer_location'
+      ]
     },
     payload: { type: Schema.Types.Mixed, required: true },
     preview: { type: String, required: true },
