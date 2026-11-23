@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { currentWhatsappChat } from './channel-context.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AppError, DuplicateRecordError, InsufficientStockError } from '../../middleware/error-handler.js';
@@ -41,7 +42,8 @@ const ACTION_PERMISSION: Record<AgentPendingActionType, string> = {
   create_order: 'orders.manage',
   register_payment: 'orders.manage',
   create_customer: 'customers.manage',
-  change_order_status: 'orders.manage'
+  change_order_status: 'orders.manage',
+  set_customer_location: 'customers.manage'
 };
 
 /** Bonus instruction always appended to a prepare response. */
@@ -234,6 +236,7 @@ const storePendingAction = async (
     type,
     payload,
     preview,
+    channelChatId: currentWhatsappChat(),
     status: 'pending',
     idempotencyKey: randomUUID(),
     expiresAt
@@ -525,6 +528,45 @@ export const prepareCustomerAction = async (
   return storePendingAction(ctx, 'create_customer', payload, preview);
 };
 
+export const prepareCustomerLocationArgsSchema = z.object({
+  customerName: z.string().trim().min(2).max(100),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180)
+});
+export type PrepareCustomerLocationArgs = z.infer<typeof prepareCustomerLocationArgsSchema>;
+
+/**
+ * Prepares saving a location on an existing customer, found by exact name
+ * (case-insensitive) inside the caller's tenant. Nothing is written until the
+ * user confirms the card.
+ */
+export const prepareCustomerLocationAction = async (
+  args: PrepareCustomerLocationArgs,
+  ctx: PrepareActionContext
+): Promise<PreparedActionResponse> => {
+  const escaped = args.customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = await Customer.find({ name: new RegExp(`^${escaped}$`, 'i') })
+    .limit(2)
+    .select('name');
+
+  if (matches.length > 1) {
+    throw new AppError('Hay más de un cliente con ese nombre. Indicá cuál.', 409);
+  }
+  const customer = matches[0];
+  if (!customer) {
+    throw new AppError('No encontré un cliente con ese nombre', 404);
+  }
+
+  const payload = {
+    customerId: String(customer._id),
+    customerName: customer.name,
+    location: { type: 'Point', coordinates: [args.lng, args.lat] }
+  };
+  const preview = `Guardar la ubicación de ${customer.name} (${args.lat.toFixed(5)}, ${args.lng.toFixed(5)}).`;
+
+  return storePendingAction(ctx, 'set_customer_location', payload, preview);
+};
+
 // ─── Read / confirm / cancel ────────────────────────────────────────────────
 
 export const getAction = async (userId: string, actionId: string): Promise<AgentActionView> => {
@@ -675,6 +717,25 @@ const executePendingAction = async (
         resultSummary: `Cliente ${customer.name} creado`,
         resultRef: { entity: 'customer', id: String(customer._id), label: customer.name },
         message: `✅ Cliente ${customer.name} creado.`
+      };
+    }
+    case 'set_customer_location': {
+      const { customerId, location } = action.payload as {
+        customerId: string;
+        location: { type: 'Point'; coordinates: [number, number] };
+      };
+      const customer = await Customer.findByIdAndUpdate(
+        customerId,
+        { $set: { location } },
+        { new: true }
+      );
+      if (!customer) {
+        throw new AppError('El cliente ya no existe', 404);
+      }
+      return {
+        resultSummary: `Ubicación de ${customer.name} guardada`,
+        resultRef: { entity: 'customer', id: String(customer._id), label: customer.name },
+        message: `✅ Ubicación de ${customer.name} guardada.`
       };
     }
   }

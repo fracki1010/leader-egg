@@ -51,7 +51,8 @@ export type AgentPendingActionType =
   | 'create_order'
   | 'register_payment'
   | 'create_customer'
-  | 'change_order_status';
+  | 'change_order_status'
+  | 'set_customer_location';
 
 export type AgentPendingActionStatus =
   | 'pending'
@@ -77,6 +78,8 @@ export interface IAgentPendingAction extends Document {
   payload: Record<string, unknown>;
   /** Spanish, human-readable summary of what the user is approving. */
   preview: string;
+  /** WhatsApp chat that prepared the action; null when prepared in the app. */
+  channelChatId: string | null;
   status: AgentPendingActionStatus;
   idempotencyKey: string;
   resultSummary?: string;
@@ -169,10 +172,17 @@ const agentPendingActionSchema = new Schema<IAgentPendingAction>(
     type: {
       type: String,
       required: true,
-      enum: ['create_order', 'register_payment', 'create_customer', 'change_order_status']
+      enum: [
+        'create_order',
+        'register_payment',
+        'create_customer',
+        'change_order_status',
+        'set_customer_location'
+      ]
     },
     payload: { type: Schema.Types.Mixed, required: true },
     preview: { type: String, required: true },
+    channelChatId: { type: String, default: null },
     status: {
       type: String,
       required: true,

@@ -1,6 +1,9 @@
 import type { Request, Response } from 'express';
 import { env } from '../../config/env.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { parseInboundMessage } from './inbound.js';
+import { handleInbound } from './inbound-service.js';
+import { enqueue } from './queue.js';
 import {
   applyStatusEvent,
   findWhatsappInstance,
@@ -34,6 +37,12 @@ export const webhookHandler = async (request: Request, response: Response): Prom
   // Status events are small master-DB writes, applied before the ack.
   if (delivery && isStatusEvent(delivery)) {
     await applyStatusEvent(instanceName, delivery);
+  }
+
+  // Inbound text is handed to the per-sender lane and acknowledged right away.
+  const inbound = delivery ? parseInboundMessage(delivery) : null;
+  if (inbound) {
+    enqueue(`${instanceName}:${inbound.senderKey}`, () => handleInbound(instance, inbound));
   }
 
   response.status(200).json({ received: true });

@@ -8,3 +8,5 @@ Index of the project's knowledge articles. Each row points to a file under `02-D
 | Harness | User profile (technical level, project kind) | `02-DOCS/wiki/harness/user-profile.md` |
 | Harness | Decisions log | `02-DOCS/wiki/harness/decisions.md` |
 | sdd | Project constitution (SDD non-negotiables) | `02-DOCS/wiki/sdd/constitution.md` |
+| sdd/specs | WhatsApp agent turn (slice c), approved | `02-DOCS/wiki/sdd/specs/whatsapp-agent-turn.md` |
+| sdd/plans | WhatsApp agent turn (slice c), technical plan | `02-DOCS/wiki/sdd/plans/whatsapp-agent-turn.md` |

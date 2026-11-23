@@ -26,6 +26,7 @@ describe('Groq client timeout', () => {
     const groq = createGroqClient({
       baseUrl: 'https://api.groq.com/openai/v1',
       apiKey: 'groq-secret-key',
+      transcriptionModel: 'whisper-large-v3-turbo',
       timeoutMs: 20
     });
 
