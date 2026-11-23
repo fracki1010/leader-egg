@@ -88,6 +88,16 @@ describe('handleDecision', () => {
     expect(reply).toBe('No hay nada para confirmar.');
   });
 
+  it('confirms only this chat\'s action when another chat also has one pending', async () => {
+    const own = await seedPending('Cobro de $100', inFiveMinutes(), new Date(), CHAT);
+    await seedPending('Cobro de $250', inFiveMinutes(), new Date(), OTHER_CHAT);
+
+    const reply = await inTenant(() => handleDecision(caller, 'yes', CHAT));
+
+    expect(confirmAction).toHaveBeenCalledWith(caller.userId, 'admin', ['orders.manage'], String(own._id));
+    expect(reply).toBe('Pago registrado.');
+  });
+
   it('does not confirm an action prepared in the app, from WhatsApp', async () => {
     await seedPending('Cobro de $100', inFiveMinutes(), new Date(), null);
 

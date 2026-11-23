@@ -16,7 +16,8 @@ import { WhatsappAllowedNumber } from '../modules/whatsapp/model.js';
 import { waitForIdle } from '../modules/whatsapp/queue.js';
 import { chat } from '../modules/agent/service.js';
 import { AgentPendingAction } from '../modules/agent/model.js';
-import { confirmAction } from '../modules/agent/actions.js';
+import { confirmAction, prepareCustomerLocationAction } from '../modules/agent/actions.js';
+import { Customer } from '../modules/customers/model.js';
 import { Types } from 'mongoose';
 
 const sendText = vi.hoisted(() => vi.fn(async () => ({})));
@@ -135,6 +136,36 @@ describe('WhatsApp turn: text in, reply out', () => {
     expect(confirmAction).toHaveBeenCalledWith(expect.any(String), 'admin', ['orders.manage'], String(action._id));
     expect(chat).not.toHaveBeenCalled();
     expect(sendText).toHaveBeenCalledWith(INSTANCE_NAME, { number: LINKED_JID, text: 'Pago registrado.' });
+  });
+
+  it('records the WhatsApp chat on an action prepared during the turn', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const connection = getTenantConnection(tenant!.dbName);
+    await runWithTenancy({ connection, tenantId: String(tenant!._id) }, () =>
+      Customer.create({ name: 'Rosa Vidal', type: 'B2C', phone: '3', address: 'E' })
+    );
+    vi.mocked(chat).mockImplementationOnce(async (userId) => {
+      await prepareCustomerLocationAction(
+        { customerName: 'Rosa Vidal', lat: -34.6, lng: -58.4 },
+        {
+          userId,
+          conversationId: new Types.ObjectId(),
+          messageId: new Types.ObjectId()
+        } as unknown as Parameters<typeof prepareCustomerLocationAction>[1]
+      );
+      return { reply: '¿Guardo la ubicación de Rosa Vidal?', toolCalls: [], actions: [] };
+    });
+
+    await request
+      .post(WEBHOOK_PATH)
+      .set('x-webhook-secret', SECRET)
+      .send(textUpsert(LINKED_JID, 'guardá la ubicación de Rosa Vidal', 'MSG-PREPARE'));
+    await waitForIdle();
+
+    const stored = await runWithTenancy({ connection, tenantId: String(tenant!._id) }, () =>
+      AgentPendingAction.findOne({ type: 'set_customer_location' })
+    );
+    expect(stored?.channelChatId).toBe(LINKED_JID);
   });
 
   it('tells the user when the agent fails, and writes nothing', async () => {
