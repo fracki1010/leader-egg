@@ -153,7 +153,12 @@ describe('agent: set_customer_location', () => {
     ['one coordinate', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [1] } })],
     ['longitude below -180', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [-181, 0] } })],
     ['latitude above 90', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [0, 91] } })],
-    ['an uppercase customer id', (id: string) => ({ customerId: `A${id.slice(1)}`, location: { type: 'Point', coordinates: [0, 0] } })]
+    ['an uppercase customer id', (id: string) => ({ customerId: `A${id.slice(1)}`, location: { type: 'Point', coordinates: [0, 0] } })],
+    ['longitude above 180', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [181, 0] } })],
+    ['latitude below -90', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [0, -91] } })],
+    ['a 25-character id', (id: string) => ({ customerId: `${id}0`, location: { type: 'Point', coordinates: [0, 0] } })],
+    ['a prefixed id', (id: string) => ({ customerId: `x${id}`, location: { type: 'Point', coordinates: [0, 0] } })],
+    ['a non-hex id', () => ({ customerId: 'g'.repeat(24), location: { type: 'Point', coordinates: [0, 0] } })]
   ])('refuses a stored location with %s, and writes nothing', async (_label, build) => {
     const customer = await inTenant(() => Customer.create({ name: 'Cliente Prueba', type: 'B2C', phone: '6', address: 'H' }));
     const action = await inTenant(() =>
@@ -174,6 +179,29 @@ describe('agent: set_customer_location', () => {
     ).rejects.toMatchObject({ status: 400 });
 
     expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
+  });
+
+  it.each([
+    [180, 90],
+    [-180, -90]
+  ])('accepts the edge coordinates [%i, %i] and writes them', async (lng, lat) => {
+    const customer = await inTenant(() => Customer.create({ name: 'Borde Límite', type: 'B2C', phone: '8', address: 'I' }));
+    const action = await inTenant(() =>
+      AgentPendingAction.create({
+        userId: USER_ID,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'set_customer_location',
+        payload: { customerId: String(customer._id), location: { type: 'Point', coordinates: [lng, lat] } },
+        preview: 'Ubicación en el borde',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      })
+    );
+
+    await inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], String(action._id)));
+
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location?.coordinates).toEqual([lng, lat]);
   });
 
   it('writes the location when a permitted user confirms', async () => {
