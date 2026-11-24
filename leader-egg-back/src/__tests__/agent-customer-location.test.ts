@@ -147,6 +147,35 @@ describe('agent: set_customer_location', () => {
     expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
   });
 
+  it.each([
+    ['a Polygon instead of a Point', (id: string) => ({ customerId: id, location: { type: 'Polygon', coordinates: [0, 0] } })],
+    ['three coordinates', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [1, 2, 3] } })],
+    ['one coordinate', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [1] } })],
+    ['longitude below -180', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [-181, 0] } })],
+    ['latitude above 90', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [0, 91] } })],
+    ['an uppercase customer id', (id: string) => ({ customerId: `A${id.slice(1)}`, location: { type: 'Point', coordinates: [0, 0] } })]
+  ])('refuses a stored location with %s, and writes nothing', async (_label, build) => {
+    const customer = await inTenant(() => Customer.create({ name: 'Cliente Prueba', type: 'B2C', phone: '6', address: 'H' }));
+    const action = await inTenant(() =>
+      AgentPendingAction.create({
+        userId: USER_ID,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'set_customer_location',
+        payload: build(String(customer._id)),
+        preview: 'Ubicación de prueba',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      })
+    );
+
+    await expect(
+      inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], String(action._id)))
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
+  });
+
   it('writes the location when a permitted user confirms', async () => {
     const customer = await inTenant(() => Customer.create({ name: 'Marta Ruiz', type: 'B2C', phone: '2', address: 'D' }));
     await inTenant(() => prepareCustomerLocationAction({ customerName: 'Marta Ruiz', lat: -31.4, lng: -64.2 }, ctx));
