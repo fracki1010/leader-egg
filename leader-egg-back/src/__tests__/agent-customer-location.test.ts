@@ -103,6 +103,28 @@ describe('agent: set_customer_location', () => {
     expect(refused?.status).toBe('failed');
   });
 
+  it('refuses a stored payload that no longer has the expected shape, and writes nothing', async () => {
+    const customer = await inTenant(() => Customer.create({ name: 'Elena Soto', type: 'B2C', phone: '4', address: 'F' }));
+    const action = await inTenant(() =>
+      AgentPendingAction.create({
+        userId: USER_ID,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'set_customer_location',
+        payload: { customerId: 'no-es-un-id', location: { type: 'Point', coordinates: [0, 0] } },
+        preview: 'Ubicación de Elena Soto',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      })
+    );
+
+    await expect(
+      inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], String(action._id)))
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
+  });
+
   it('writes the location when a permitted user confirms', async () => {
     const customer = await inTenant(() => Customer.create({ name: 'Marta Ruiz', type: 'B2C', phone: '2', address: 'D' }));
     await inTenant(() => prepareCustomerLocationAction({ customerName: 'Marta Ruiz', lat: -31.4, lng: -64.2 }, ctx));
