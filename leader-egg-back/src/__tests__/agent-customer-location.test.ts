@@ -125,6 +125,28 @@ describe('agent: set_customer_location', () => {
     expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
   });
 
+  it('refuses a stored location outside the coordinate range, with a valid customer id', async () => {
+    const customer = await inTenant(() => Customer.create({ name: 'Iván Peña', type: 'B2C', phone: '5', address: 'G' }));
+    const action = await inTenant(() =>
+      AgentPendingAction.create({
+        userId: USER_ID,
+        conversationId: new Types.ObjectId(),
+        messageId: new Types.ObjectId(),
+        type: 'set_customer_location',
+        payload: { customerId: String(customer._id), location: { type: 'Point', coordinates: [999, 999] } },
+        preview: 'Ubicación de Iván Peña',
+        idempotencyKey: new Types.ObjectId().toString(),
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+      })
+    );
+
+    await expect(
+      inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], String(action._id)))
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
+  });
+
   it('writes the location when a permitted user confirms', async () => {
     const customer = await inTenant(() => Customer.create({ name: 'Marta Ruiz', type: 'B2C', phone: '2', address: 'D' }));
     await inTenant(() => prepareCustomerLocationAction({ customerName: 'Marta Ruiz', lat: -31.4, lng: -64.2 }, ctx));
