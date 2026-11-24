@@ -157,6 +157,7 @@ describe('agent: set_customer_location', () => {
     ['longitude above 180', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [181, 0] } })],
     ['latitude below -90', (id: string) => ({ customerId: id, location: { type: 'Point', coordinates: [0, -91] } })],
     ['a 25-character id', (id: string) => ({ customerId: `${id}0`, location: { type: 'Point', coordinates: [0, 0] } })],
+    ['a 23-character id', (id: string) => ({ customerId: id.slice(1), location: { type: 'Point', coordinates: [0, 0] } })],
     ['a prefixed id', (id: string) => ({ customerId: `x${id}`, location: { type: 'Point', coordinates: [0, 0] } })],
     ['a non-hex id', () => ({ customerId: 'g'.repeat(24), location: { type: 'Point', coordinates: [0, 0] } })]
   ])('refuses a stored location with %s, and writes nothing', async (_label, build) => {
