@@ -96,7 +96,8 @@ describe('Dashboard Summary — GET /api/v1/dashboard/summary', () => {
       const res = await request
         .get('/api/v1/dashboard/summary')
         .set('Authorization', `Bearer ${adminToken}`);
-      expect(res.status).toBe(200);
+      // The body names the failure when the flaky 500 shows up in a full run.
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
     });
 
     it('returns 200 for driver role (dashboard is the hero screen for both)', async () => {
