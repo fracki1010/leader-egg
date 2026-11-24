@@ -8,6 +8,7 @@ import { AppError } from '../middleware/error-handler.js';
 import { Customer } from '../modules/customers/model.js';
 import { AgentPendingAction } from '../modules/agent/model.js';
 import {
+  cancelAction,
   confirmAction,
   prepareCustomerLocationAction
 } from '../modules/agent/actions.js';
@@ -203,6 +204,34 @@ describe('agent: set_customer_location', () => {
     await inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], String(action._id)));
 
     expect((await inTenant(() => Customer.findById(customer._id)))?.location?.coordinates).toEqual([lng, lat]);
+  });
+
+  it('confirms and cancels only from the chat that prepared the action', async () => {
+    const LINKED = '5491155550011@s.whatsapp.net';
+    const OTHER = '5491155550022@s.whatsapp.net';
+    const customer = await inTenant(() => Customer.create({ name: 'Sara Mora', type: 'B2C', phone: '9', address: 'J' }));
+    await inTenant(() =>
+      runInWhatsappChat(LINKED, () =>
+        prepareCustomerLocationAction({ customerName: 'Sara Mora', lat: -31.4, lng: -64.2 }, ctx)
+      )
+    );
+    const id = String((await inTenant(() => AgentPendingAction.findOne({ type: 'set_customer_location' })))!._id);
+
+    await expect(
+      inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id))
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      inTenant(() => runInWhatsappChat(OTHER, () => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id)))
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      inTenant(() => runInWhatsappChat(OTHER, () => cancelAction(String(USER_ID), id)))
+    ).rejects.toMatchObject({ status: 404 });
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
+
+    await inTenant(() =>
+      runInWhatsappChat(LINKED, () => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id))
+    );
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location?.coordinates).toEqual([-64.2, -31.4]);
   });
 
   it('writes the location when a permitted user confirms', async () => {
