@@ -53,3 +53,26 @@
 - **Options:** merge commit, squash, rebase.
 - **Chosen:** merge commit, for PRs #3, #4 and #5.
 - **Why:** each branch's commits stay visible in history. Recorded in the constitution, section 4.
+
+## 2026-11-23 — WhatsApp confirmations scoped to their chat
+
+- **Options:** any chat of the linked user can confirm a pending action, or only the chat that prepared it.
+- **Chosen:** only the chat that prepared it. Actions prepared in the app cannot be confirmed from WhatsApp.
+- **Why:** the approved spec requires it. A "sí" in an unrelated chat must not execute a payment.
+- **Limit:** one contact seen as `@lid` and as `@s.whatsapp.net` gets two chat ids, so the confirmation fails closed. Upgrade if the provider normalizes these identifiers.
+- **Source:** `02-DOCS/wiki/sdd/specs/whatsapp-agent-turn.md`; commits `94378ce`, `cb77deb`, `0ffc2d5`.
+
+## 2026-11-23 — Voice notes confirm only on exact "sí" or "no"
+
+- **Options:** voice cannot confirm; voice confirms on an exact transcription; voice confirms when a transcription contains "sí".
+- **Chosen:** exact transcription, as the owner approved in the spec.
+- **Why:** a loose match could confirm a payment from a misheard word.
+- **Limit:** speech-to-text can turn silence into "Sí.". This risk was accepted; see the spec's open points.
+- **Source:** `02-DOCS/wiki/sdd/specs/whatsapp-agent-turn.md`; commit `c0431d0`.
+
+## 2026-11-24 — WhatsApp assistant merged through PR #7
+
+- **Options:** merge commit or squash.
+- **Chosen:** merge commit, as for PRs #3 to #5.
+- **Why:** keeps the feature commits visible in history.
+- **Result:** merge commit `0153544`. Branch `feat/whatsapp-agent-turn` kept on origin.
