@@ -535,6 +535,15 @@ export const prepareCustomerLocationArgsSchema = z.object({
 });
 export type PrepareCustomerLocationArgs = z.infer<typeof prepareCustomerLocationArgsSchema>;
 
+/** The payload stored by prepareCustomerLocationAction, re-checked before it is written. */
+const storedCustomerLocationPayloadSchema = z.object({
+  customerId: z.string().regex(/^[a-f0-9]{24}$/),
+  location: z.object({
+    type: z.literal('Point'),
+    coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])
+  })
+});
+
 /**
  * Prepares saving a location on an existing customer, found by exact name
  * (case-insensitive) inside the caller's tenant. Nothing is written until the
@@ -720,10 +729,11 @@ const executePendingAction = async (
       };
     }
     case 'set_customer_location': {
-      const { customerId, location } = action.payload as {
-        customerId: string;
-        location: { type: 'Point'; coordinates: [number, number] };
-      };
+      const parsed = storedCustomerLocationPayloadSchema.safeParse(action.payload);
+      if (!parsed.success) {
+        throw new AppError('Los datos guardados de la acción ya no son válidos', 400);
+      }
+      const { customerId, location } = parsed.data;
       const customer = await Customer.findByIdAndUpdate(
         customerId,
         { $set: { location } },

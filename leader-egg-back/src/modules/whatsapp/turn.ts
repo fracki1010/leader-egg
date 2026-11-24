@@ -48,8 +48,9 @@ const answerText = (input: WhatsappTurnInput, text: string): Promise<string | nu
       if (decision) return await handleDecision(caller, decision, input.replyJid);
 
       return (await chat(input.userId, user.name, caller.permissions, text)).reply;
-    } catch {
+    } catch (error) {
       // The user is told the turn failed; nothing is written on this path.
+      console.error('[whatsapp] turn failed:', error instanceof Error ? error.name : 'unknown error');
       return FAILURE_REPLY;
     }
   });
