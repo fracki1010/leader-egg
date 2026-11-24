@@ -226,11 +226,31 @@ describe('agent: set_customer_location', () => {
     await expect(
       inTenant(() => runInWhatsappChat(OTHER, () => cancelAction(String(USER_ID), id)))
     ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      inTenant(() => cancelAction(String(USER_ID), id))
+    ).rejects.toMatchObject({ status: 404 });
     expect((await inTenant(() => Customer.findById(customer._id)))?.location).toBeUndefined();
 
     await inTenant(() =>
       runInWhatsappChat(LINKED, () => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id))
     );
+    expect((await inTenant(() => Customer.findById(customer._id)))?.location?.coordinates).toEqual([-64.2, -31.4]);
+  });
+
+  it('lets no WhatsApp chat confirm or cancel an action made in the app', async () => {
+    const OTHER = '5491155550022@s.whatsapp.net';
+    const customer = await inTenant(() => Customer.create({ name: 'Tomás Vera', type: 'B2C', phone: '7', address: 'K' }));
+    await inTenant(() => prepareCustomerLocationAction({ customerName: 'Tomás Vera', lat: -31.4, lng: -64.2 }, ctx));
+    const id = String((await inTenant(() => AgentPendingAction.findOne({ type: 'set_customer_location' })))!._id);
+
+    await expect(
+      inTenant(() => runInWhatsappChat(OTHER, () => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id)))
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      inTenant(() => runInWhatsappChat(OTHER, () => cancelAction(String(USER_ID), id)))
+    ).rejects.toMatchObject({ status: 404 });
+
+    await inTenant(() => confirmAction(String(USER_ID), 'admin', ['customers.manage'], id));
     expect((await inTenant(() => Customer.findById(customer._id)))?.location?.coordinates).toEqual([-64.2, -31.4]);
   });
 
