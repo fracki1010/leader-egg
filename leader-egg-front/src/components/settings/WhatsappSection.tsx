@@ -71,13 +71,13 @@ export function WhatsappSection() {
         />
       )}
 
-      {data?.state !== 'open' && (
+      {data?.state === 'not_created' && (
         <MuiButton
           variant="secondary"
           onClick={() => connect.mutate()}
           disabled={connect.isPending}
         >
-          {data?.state === 'not_created' ? 'Conectar WhatsApp' : 'Generar nuevo QR'}
+          Conectar WhatsApp
         </MuiButton>
       )}
     </Box>
