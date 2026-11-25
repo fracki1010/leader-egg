@@ -14,9 +14,13 @@ import { Tenant, WhatsappInstance } from '../tenancy/master-models.js';
 import { getTenantConnection } from '../tenancy/registry.js';
 import { runWithTenancy } from '../tenancy/context.js';
 import { User } from '../modules/auth/model.js';
-import { getEvolutionClient } from '../modules/whatsapp/evolution-client.js';
+import { getEvolutionClient, MESSAGES } from '../modules/whatsapp/evolution-client.js';
+import { AppError } from '../middleware/error-handler.js';
 
-vi.mock('../modules/whatsapp/evolution-client.js', () => ({ getEvolutionClient: vi.fn() }));
+vi.mock('../modules/whatsapp/evolution-client.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../modules/whatsapp/evolution-client.js')>()),
+  getEvolutionClient: vi.fn()
+}));
 vi.mock('../config/env.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../config/env.js')>();
   return {
@@ -82,6 +86,7 @@ describe('whatsapp instance settings', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ state: 'created', qrCode: QR });
+    expect((await WhatsappInstance.findOne({}))?.leaseUntil).toBeNull();
     expect(evolution.createInstance).toHaveBeenCalledWith({
       instanceName,
       webhookUrl: `https://api.example.test/api/v1/whatsapp/webhook/${instanceName}`,
@@ -123,15 +128,40 @@ describe('whatsapp instance settings', () => {
     expect((await WhatsappInstance.findOne({ tenantId: tenant!._id }))?.providerCreated).toBe(true);
   });
 
+  it('does not adopt an instance when the create was refused, even if the probe finds it', async () => {
+    evolution.createInstance.mockRejectedValueOnce(new AppError(MESSAGES.unauthorized, 503));
+    evolution.connectionState.mockResolvedValueOnce({ instance: { state: 'open' } });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(503);
+    expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(false);
+  });
+
   it('adopts the instance when the create call failed after Evolution made it', async () => {
-    evolution.createInstance.mockRejectedValueOnce(new Error('timeout'));
+    evolution.createInstance.mockRejectedValueOnce(new AppError(MESSAGES.unreachable, 503));
     evolution.connectionState.mockResolvedValueOnce({ instance: { state: 'connecting' } });
 
     const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(true);
+    expect(evolution.connectionState).toHaveBeenCalledWith(`tenant-${(await Tenant.findById(getTestTenantId()))!.slug}`);
     expect(evolution.connectInstance).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not free a newer lease when its own create fails', async () => {
+    const future = new Date(Date.now() + 60_000);
+    evolution.createInstance.mockImplementationOnce(async () => {
+      // Another connect takes a newer lease while this create is still running.
+      await WhatsappInstance.updateOne({}, { $set: { leaseUntil: future } });
+      throw new Error('timeout');
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(500);
+    expect((await WhatsappInstance.findOne({}))?.leaseUntil?.getTime()).toBe(future.getTime());
   });
 
   it('takes over an expired lease left by a crash', async () => {

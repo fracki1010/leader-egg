@@ -6,7 +6,7 @@ import {
 } from '../../tenancy/master-models.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { env } from '../../config/env.js';
-import { getEvolutionClient } from './evolution-client.js';
+import { getEvolutionClient, MESSAGES } from './evolution-client.js';
 
 /** How long one connect holds the right to create the instance. A crash expires it. */
 const CREATE_LEASE_MS = 60_000;
@@ -68,13 +68,17 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
         webhookSecret
       });
     } catch (error) {
-      // The call can fail after Evolution created the instance (timeout, lost reply).
-      // Probe it: if it exists, record it and go on; otherwise free our lease and fail.
-      let exists = true;
-      try {
-        await evolution.connectionState(doc.instanceName);
-      } catch {
-        exists = false;
+      // A lost reply (timeout, dropped connection) can hide a created instance. Probe it
+      // and adopt it only then. Other failures, such as "name in use", are not adopted:
+      // that instance may have been made elsewhere, without our webhook.
+      let exists = false;
+      if (error instanceof AppError && error.message === MESSAGES.unreachable) {
+        try {
+          await evolution.connectionState(doc.instanceName);
+          exists = true;
+        } catch {
+          exists = false;
+        }
       }
       if (!exists) {
         // Only the lease this connect took is released, never a newer one.
