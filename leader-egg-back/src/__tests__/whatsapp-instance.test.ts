@@ -35,7 +35,9 @@ const QR = 'data:image/png;base64,QR1';
 const evolution = {
   createInstance: vi.fn(async () => ({})),
   connectInstance: vi.fn(async () => ({ base64: QR })),
-  connectionState: vi.fn(),
+  connectionState: vi.fn(async (): Promise<Record<string, unknown>> => {
+    throw new Error('instance not found');
+  }),
   logoutInstance: vi.fn(),
   sendText: vi.fn(),
   getBase64FromMedia: vi.fn()
@@ -119,6 +121,47 @@ describe('whatsapp instance settings', () => {
     expect(res.status).toBe(200);
     expect(evolution.createInstance).toHaveBeenCalledTimes(1);
     expect((await WhatsappInstance.findOne({ tenantId: tenant!._id }))?.providerCreated).toBe(true);
+  });
+
+  it('adopts the instance when the create call failed after Evolution made it', async () => {
+    evolution.createInstance.mockRejectedValueOnce(new Error('timeout'));
+    evolution.connectionState.mockResolvedValueOnce({ instance: { state: 'connecting' } });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(true);
+    expect(evolution.connectInstance).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes over an expired lease left by a crash', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: false,
+      leaseUntil: new Date(Date.now() - 1000)
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.createInstance).toHaveBeenCalledTimes(1);
+  });
+
+  it('backs off with 409 while another connect holds a live lease', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: false,
+      leaseUntil: new Date(Date.now() + 60_000)
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(409);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
   });
 
   it('creates the instance once when two connects arrive together', async () => {

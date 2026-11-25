@@ -48,13 +48,14 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
     // Only one connect creates at a time: a live lease held by another one makes this
     // connect back off, and an expired lease (left by a crash) is taken over.
     const now = new Date();
+    const leaseUntil = new Date(now.getTime() + CREATE_LEASE_MS);
     const lease = await WhatsappInstance.updateOne(
       {
         _id: doc._id,
-        providerCreated: false,
+        providerCreated: { $ne: true },
         $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }]
       },
-      { $set: { leaseUntil: new Date(now.getTime() + CREATE_LEASE_MS) } }
+      { $set: { leaseUntil } }
     );
     if (lease.modifiedCount === 0) {
       throw new AppError('WhatsApp se está conectando. Probá de nuevo en unos segundos.', 409);
@@ -66,14 +67,25 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
         webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${doc.instanceName}`,
         webhookSecret
       });
-      await WhatsappInstance.updateOne(
-        { _id: doc._id },
-        { $set: { providerCreated: true, leaseUntil: null } }
-      );
     } catch (error) {
-      await WhatsappInstance.updateOne({ _id: doc._id }, { $set: { leaseUntil: null } });
-      throw error;
+      // The call can fail after Evolution created the instance (timeout, lost reply).
+      // Probe it: if it exists, record it and go on; otherwise free our lease and fail.
+      let exists = true;
+      try {
+        await evolution.connectionState(doc.instanceName);
+      } catch {
+        exists = false;
+      }
+      if (!exists) {
+        // Only the lease this connect took is released, never a newer one.
+        await WhatsappInstance.updateOne({ _id: doc._id, leaseUntil }, { $set: { leaseUntil: null } });
+        throw error;
+      }
     }
+    await WhatsappInstance.updateOne(
+      { _id: doc._id },
+      { $set: { providerCreated: true, leaseUntil: null } }
+    );
   }
 
   const payload = await evolution.connectInstance(doc.instanceName);
