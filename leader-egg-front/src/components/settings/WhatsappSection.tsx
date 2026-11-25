@@ -71,7 +71,7 @@ export function WhatsappSection() {
         />
       )}
 
-      {data?.state === 'not_created' && (
+      {data?.state !== 'open' && !data?.qrCode && (
         <MuiButton
           variant="secondary"
           onClick={() => connect.mutate()}

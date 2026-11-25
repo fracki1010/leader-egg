@@ -36,6 +36,14 @@ describe('WhatsappSection', () => {
     expect(screen.queryByRole('button', { name: 'Generar nuevo QR' })).toBeNull();
   });
 
+  it('offers to connect again when a failed attempt left the line without a QR', async () => {
+    getConnection.mockResolvedValue(connection({ state: 'created' }));
+
+    renderWithProviders(<WhatsappSection />);
+
+    expect(await screen.findByRole('button', { name: 'Conectar WhatsApp' })).toBeTruthy();
+  });
+
   it('shows the QR code with no manual regenerate button while waiting for scan', async () => {
     getConnection.mockResolvedValue(connection({ state: 'created', qrCode: 'QR_PAYLOAD' }));
 
