@@ -140,6 +140,24 @@ describe('whatsapp instance settings', () => {
     expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(true);
   });
 
+  it('never creates blind when the probe fails with an unexpected error', async () => {
+    evolution.connectionState.mockRejectedValueOnce(new Error('boom'));
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(500);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
+  });
+
+  it('never creates blind when the probe is refused with a status other than 404', async () => {
+    evolution.connectionState.mockRejectedValueOnce(new AppError('bad key', 401));
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(401);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
+  });
+
   it('fails closed when the probe cannot reach the provider, without creating', async () => {
     evolution.connectionState.mockRejectedValueOnce(new AppError(MESSAGES.unreachable, 503));
 
