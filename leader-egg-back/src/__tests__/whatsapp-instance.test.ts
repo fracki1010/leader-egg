@@ -11,6 +11,9 @@ import {
 } from './helpers.js';
 import { app } from '../app.js';
 import { Tenant, WhatsappInstance } from '../tenancy/master-models.js';
+import { getTenantConnection } from '../tenancy/registry.js';
+import { runWithTenancy } from '../tenancy/context.js';
+import { User } from '../modules/auth/model.js';
 import { getEvolutionClient } from '../modules/whatsapp/evolution-client.js';
 
 vi.mock('../modules/whatsapp/evolution-client.js', () => ({ getEvolutionClient: vi.fn() }));
@@ -93,6 +96,18 @@ describe('whatsapp instance settings', () => {
     expect(evolution.connectInstance).toHaveBeenCalledTimes(2);
   });
 
+  it('releases the record when Evolution refuses, so a retry can create it', async () => {
+    evolution.createInstance.mockRejectedValueOnce(new Error('provider down'));
+
+    const first = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+    expect(first.status).toBeGreaterThanOrEqual(400);
+    expect(await WhatsappInstance.countDocuments({})).toBe(0);
+
+    const second = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+    expect(second.status).toBe(200);
+    expect(evolution.createInstance).toHaveBeenCalledTimes(2);
+  });
+
   it('hides the QR once the line is open', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
     await WhatsappInstance.create({
@@ -106,6 +121,22 @@ describe('whatsapp instance settings', () => {
     const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.body).toEqual({ state: 'open', qrCode: null });
+  });
+
+  it('refuses an admin who lacks config.manage', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const connection = getTenantConnection(tenant!.dbName);
+    await runWithTenancy({ connection, tenantId: String(tenant!._id) }, () =>
+      User.updateOne({ email: 'admin@test.com' }, { $set: { permissions: [] } })
+    );
+    const token = await loginAs(request, 'admin@test.com', 'testpassword');
+
+    const get = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${token}`);
+    const connect = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${token}`);
+
+    expect(get.status).toBe(403);
+    expect(connect.status).toBe(403);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
   });
 
   it('refuses a user who is not an admin', async () => {

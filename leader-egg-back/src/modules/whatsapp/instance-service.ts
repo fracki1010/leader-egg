@@ -34,15 +34,25 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
   if (!tenant) throw new AppError('Negocio no encontrado', 404);
 
   const evolution = getEvolutionClient();
-  let doc = await WhatsappInstance.findOne({ tenantId });
-  if (!doc) {
-    const instanceName = `tenant-${tenant.slug}`;
-    await evolution.createInstance({
-      instanceName,
-      webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${instanceName}`,
-      webhookSecret
-    });
-    doc = await WhatsappInstance.create({ tenantId, instanceName });
+  // Claim the tenant's record before calling Evolution: a concurrent connect sees
+  // the claim and never creates the instance twice. A failed create releases it.
+  const { value, lastErrorObject } = await WhatsappInstance.findOneAndUpdate(
+    { tenantId },
+    { $setOnInsert: { instanceName: `tenant-${tenant.slug}` } },
+    { upsert: true, new: true, includeResultMetadata: true }
+  );
+  const doc = value!;
+  if (!lastErrorObject?.updatedExisting) {
+    try {
+      await evolution.createInstance({
+        instanceName: doc.instanceName,
+        webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${doc.instanceName}`,
+        webhookSecret
+      });
+    } catch (error) {
+      await WhatsappInstance.deleteOne({ _id: doc._id });
+      throw error;
+    }
   }
 
   const payload = await evolution.connectInstance(doc.instanceName);
