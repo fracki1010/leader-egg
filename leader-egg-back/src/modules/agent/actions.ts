@@ -595,8 +595,10 @@ export const cancelAction = async (userId: string, actionId: string): Promise<Ag
     throw new AppError('Acción no encontrada', 404);
   }
 
+  // Only the chat that prepared the action (or the app, for app-made ones) may cancel it.
+  const chat = currentWhatsappChat();
   const cancelled = await AgentPendingAction.findOneAndUpdate(
-    { _id: actionId, userId, status: 'pending' },
+    { _id: actionId, userId, status: 'pending', channelChatId: chat },
     { $set: { status: 'cancelled', resolvedAt: new Date() } },
     { new: true }
   );
@@ -606,7 +608,7 @@ export const cancelAction = async (userId: string, actionId: string): Promise<Ag
   }
 
   const existing = await AgentPendingAction.findOne({ _id: actionId, userId });
-  if (!existing) {
+  if (!existing || existing.channelChatId !== chat) {
     throw new AppError('Acción no encontrada', 404);
   }
   throw new AppError('La acción ya fue procesada', 409);
@@ -765,6 +767,7 @@ export const confirmAction = async (
   actionId: string
 ): Promise<AgentActionView> => {
   const startedAt = Date.now();
+  const chat = currentWhatsappChat();
   let action: IAgentPendingAction | null = null;
 
   const audit = async (ok: boolean, error?: string): Promise<void> => {
@@ -790,14 +793,15 @@ export const confirmAction = async (
 
     const now = new Date();
     action = await AgentPendingAction.findOneAndUpdate(
-      { _id: actionId, userId, status: 'pending', expiresAt: { $gt: now } },
+      { _id: actionId, userId, status: 'pending', expiresAt: { $gt: now }, channelChatId: chat },
       { $set: { status: 'executing' } },
       { new: true }
     );
 
     if (!action) {
       const existing = await AgentPendingAction.findOne({ _id: actionId, userId });
-      if (!existing) {
+      // Another chat's action is reported as missing, like an unknown one.
+      if (!existing || existing.channelChatId !== chat) {
         throw new AppError('Acción no encontrada', 404);
       }
       // Keep the type available for the audit trail on non-executable actions.
