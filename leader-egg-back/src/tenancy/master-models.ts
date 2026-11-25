@@ -105,6 +105,10 @@ export interface IWhatsappInstance extends Document {
   state: WhatsappInstanceState;
   qrCode?: string | null;
   qrUpdatedAt?: Date | null;
+  /** True once Evolution confirmed the instance exists. A record without it is re-created on connect. */
+  providerCreated: boolean;
+  /** Lease held by the connect that is creating the Evolution instance. */
+  leaseUntil?: Date | null;
   stateUpdatedAt: Date;
   lastEventAt?: Date | null;
   createdAt: Date;
@@ -134,6 +138,8 @@ export const whatsappInstanceSchema = new Schema<IWhatsappInstance>(
     state: { type: String, enum: WHATSAPP_INSTANCE_STATES, default: 'created' },
     qrCode: { type: String, default: null },
     qrUpdatedAt: { type: Date, default: null },
+    providerCreated: { type: Boolean, default: false },
+    leaseUntil: { type: Date, default: null },
     stateUpdatedAt: { type: Date, default: Date.now },
     lastEventAt: { type: Date, default: null }
   },

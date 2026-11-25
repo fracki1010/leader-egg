@@ -96,16 +96,45 @@ describe('whatsapp instance settings', () => {
     expect(evolution.connectInstance).toHaveBeenCalledTimes(2);
   });
 
-  it('releases the record when Evolution refuses, so a retry can create it', async () => {
+  it('keeps the record unconfirmed and frees its lease when Evolution refuses, so a retry creates it', async () => {
     evolution.createInstance.mockRejectedValueOnce(new Error('provider down'));
 
     const first = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
-    expect(first.status).toBeGreaterThanOrEqual(400);
-    expect(await WhatsappInstance.countDocuments({})).toBe(0);
+    expect(first.status).toBe(500);
+    const record = await WhatsappInstance.findOne({});
+    expect(record?.providerCreated).toBe(false);
+    expect(record?.leaseUntil).toBeNull();
 
     const second = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
     expect(second.status).toBe(200);
     expect(evolution.createInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates the instance on the next connect when a crash left the claim without it', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({ tenantId: tenant!._id, instanceName: `tenant-${tenant!.slug}`, providerCreated: false });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.createInstance).toHaveBeenCalledTimes(1);
+    expect((await WhatsappInstance.findOne({ tenantId: tenant!._id }))?.providerCreated).toBe(true);
+  });
+
+  it('creates the instance once when two connects arrive together', async () => {
+    evolution.createInstance.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return {};
+    });
+
+    const [a, b] = await Promise.all([
+      request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`),
+      request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`)
+    ]);
+
+    expect(evolution.createInstance).toHaveBeenCalledTimes(1);
+    expect(await WhatsappInstance.countDocuments({})).toBe(1);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 
   it('hides the QR once the line is open', async () => {

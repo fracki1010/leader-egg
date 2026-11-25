@@ -8,6 +8,9 @@ import { AppError } from '../../middleware/error-handler.js';
 import { env } from '../../config/env.js';
 import { getEvolutionClient } from './evolution-client.js';
 
+/** How long one connect holds the right to create the instance. A crash expires it. */
+const CREATE_LEASE_MS = 60_000;
+
 /** What the admin in Settings sees. The QR is only useful until the line is open. */
 export interface WhatsappConnectionView {
   state: WhatsappInstanceState | 'not_created';
@@ -34,23 +37,41 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
   if (!tenant) throw new AppError('Negocio no encontrado', 404);
 
   const evolution = getEvolutionClient();
-  // Claim the tenant's record before calling Evolution: a concurrent connect sees
-  // the claim and never creates the instance twice. A failed create releases it.
-  const { value, lastErrorObject } = await WhatsappInstance.findOneAndUpdate(
+  // Atomic upsert: one record per tenant, however many connects race.
+  const doc = (await WhatsappInstance.findOneAndUpdate(
     { tenantId },
     { $setOnInsert: { instanceName: `tenant-${tenant.slug}` } },
-    { upsert: true, new: true, includeResultMetadata: true }
-  );
-  const doc = value!;
-  if (!lastErrorObject?.updatedExisting) {
+    { upsert: true, new: true }
+  ))!;
+
+  if (!doc.providerCreated) {
+    // Only one connect creates at a time: a live lease held by another one makes this
+    // connect back off, and an expired lease (left by a crash) is taken over.
+    const now = new Date();
+    const lease = await WhatsappInstance.updateOne(
+      {
+        _id: doc._id,
+        providerCreated: false,
+        $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }]
+      },
+      { $set: { leaseUntil: new Date(now.getTime() + CREATE_LEASE_MS) } }
+    );
+    if (lease.modifiedCount === 0) {
+      throw new AppError('WhatsApp se está conectando. Probá de nuevo en unos segundos.', 409);
+    }
+
     try {
       await evolution.createInstance({
         instanceName: doc.instanceName,
         webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${doc.instanceName}`,
         webhookSecret
       });
+      await WhatsappInstance.updateOne(
+        { _id: doc._id },
+        { $set: { providerCreated: true, leaseUntil: null } }
+      );
     } catch (error) {
-      await WhatsappInstance.deleteOne({ _id: doc._id });
+      await WhatsappInstance.updateOne({ _id: doc._id }, { $set: { leaseUntil: null } });
       throw error;
     }
   }
