@@ -11,6 +11,7 @@ import { useUpdateBusinessProfile } from '../hooks/mutations/index.ts';
 import { MuiButton, MuiSnackbar, MuiTextField, PageHeader } from '../components/ui/index.ts';
 import { ChangePasswordDialog } from '../components/settings/ChangePasswordDialog.tsx';
 import { OpeningBalancesSection } from '../components/settings/OpeningBalancesSection.tsx';
+import { WhatsappSection } from '../components/settings/WhatsappSection.tsx';
 import { ThemeToggle } from '../components/ThemeToggle.tsx';
 import { InstallBanner } from '../components/driver/InstallBanner.tsx';
 import { ROLE_LABELS } from '../lib/permissions.ts';
@@ -590,6 +591,13 @@ export function SettingsPage() {
           <Divider sx={{ my: 2.5, borderColor: 'outlineVariant' }} />
 
           <OpeningBalancesSection />
+
+          {canManageConfig && (
+            <>
+              <Divider sx={{ my: 2.5, borderColor: 'outlineVariant' }} />
+              <WhatsappSection />
+            </>
+          )}
 
           <Divider sx={{ my: 2.5, borderColor: 'outlineVariant' }} />
 
