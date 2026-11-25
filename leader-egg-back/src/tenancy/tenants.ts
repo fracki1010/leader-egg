@@ -2,7 +2,8 @@ import { Types } from 'mongoose';
 import { AppError } from '../middleware/error-handler.js';
 import { User } from '../modules/auth/model.js';
 import { runWithTenancy } from './context.js';
-import { Tenant, EmailIndex, type ITenant } from './master-models.js';
+import { Tenant, EmailIndex, WhatsappInstance, type ITenant } from './master-models.js';
+import { getEvolutionClient } from '../modules/whatsapp/evolution-client.js';
 import { getTenantConnection } from './registry.js';
 import { platformDbName } from './master.js';
 import { seedTenantData } from '../seed.js';
@@ -212,6 +213,19 @@ export const deprovisionTenant = async (
 
   if (options.confirm !== tenant.slug) {
     throw new AppError('Confirmation slug does not match the tenant slug', 400);
+  }
+
+  // The WhatsApp line goes first. If Evolution cannot delete it, the tenant stays, so
+  // no orphaned line is left for a later tenant with this slug to adopt.
+  const line = await WhatsappInstance.findOne({ tenantId: tenant._id });
+  if (line) {
+    try {
+      await getEvolutionClient().deleteInstance(line.instanceName);
+    } catch (error) {
+      // Evolution never had it (the create never landed): nothing to delete.
+      if (!(error instanceof AppError && error.status === 404)) throw error;
+    }
+    await WhatsappInstance.deleteOne({ _id: line._id });
   }
 
   await getTenantConnection(tenant.dbName).dropDatabase();

@@ -44,6 +44,7 @@ export interface EvolutionClient {
   connectInstance(instanceName: string): Promise<EvolutionPayload>;
   connectionState(instanceName: string): Promise<EvolutionPayload>;
   logoutInstance(instanceName: string): Promise<EvolutionPayload>;
+  deleteInstance(instanceName: string): Promise<EvolutionPayload>;
   sendText(instanceName: string, input: { number: string; text: string }): Promise<EvolutionPayload>;
   getBase64FromMedia(
     instanceName: string,
@@ -124,6 +125,7 @@ export const createEvolutionClient = (config: EvolutionClientConfig): EvolutionC
     connectionState: (instanceName) =>
       request('GET', `/instance/connectionState/${instanceName}`),
     logoutInstance: (instanceName) => request('DELETE', `/instance/logout/${instanceName}`),
+    deleteInstance: (instanceName) => request('DELETE', `/instance/delete/${instanceName}`),
     sendText: (instanceName, input) =>
       request('POST', `/message/sendText/${instanceName}`, input),
     getBase64FromMedia: (instanceName, key, convertToMp4 = false) =>
