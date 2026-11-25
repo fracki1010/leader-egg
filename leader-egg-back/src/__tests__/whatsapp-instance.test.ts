@@ -39,8 +39,9 @@ const QR = 'data:image/png;base64,QR1';
 const evolution = {
   createInstance: vi.fn(async () => ({})),
   connectInstance: vi.fn(async () => ({ base64: QR })),
+  // Default: the instance does not exist yet, so the connect creates it.
   connectionState: vi.fn(async (): Promise<Record<string, unknown>> => {
-    throw new Error('instance not found');
+    throw new AppError(MESSAGES.notFound, 404);
   }),
   logoutInstance: vi.fn(),
   sendText: vi.fn(),
@@ -128,26 +129,27 @@ describe('whatsapp instance settings', () => {
     expect((await WhatsappInstance.findOne({ tenantId: tenant!._id }))?.providerCreated).toBe(true);
   });
 
-  it('does not adopt an instance when the create was refused, even if the probe finds it', async () => {
-    evolution.createInstance.mockRejectedValueOnce(new AppError(MESSAGES.unauthorized, 503));
-    evolution.connectionState.mockResolvedValueOnce({ instance: { state: 'open' } });
-
-    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
-
-    expect(res.status).toBe(503);
-    expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(false);
-  });
-
-  it('adopts the instance when the create call failed after Evolution made it', async () => {
-    evolution.createInstance.mockRejectedValueOnce(new AppError(MESSAGES.unreachable, 503));
+  it('adopts an instance Evolution already has, without creating it', async () => {
     evolution.connectionState.mockResolvedValueOnce({ instance: { state: 'connecting' } });
 
     const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(true);
     expect(evolution.connectionState).toHaveBeenCalledWith(`tenant-${(await Tenant.findById(getTestTenantId()))!.slug}`);
-    expect(evolution.connectInstance).toHaveBeenCalledTimes(1);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
+    expect((await WhatsappInstance.findOne({}))?.providerCreated).toBe(true);
+  });
+
+  it('fails closed when the probe cannot reach the provider, without creating', async () => {
+    evolution.connectionState.mockRejectedValueOnce(new AppError(MESSAGES.unreachable, 503));
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(503);
+    expect(evolution.createInstance).not.toHaveBeenCalled();
+    const record = await WhatsappInstance.findOne({});
+    expect(record?.providerCreated).toBe(false);
+    expect(record?.leaseUntil).toBeNull();
   });
 
   it('does not free a newer lease when its own create fails', async () => {

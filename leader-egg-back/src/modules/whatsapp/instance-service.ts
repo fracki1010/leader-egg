@@ -6,7 +6,7 @@ import {
 } from '../../tenancy/master-models.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { env } from '../../config/env.js';
-import { getEvolutionClient, MESSAGES } from './evolution-client.js';
+import { getEvolutionClient } from './evolution-client.js';
 
 /** How long one connect holds the right to create the instance. A crash expires it. */
 const CREATE_LEASE_MS = 60_000;
@@ -24,6 +24,23 @@ const toView = (doc: IWhatsappInstance | null): WhatsappConnectionView => {
 
 export const getWhatsappConnection = async (tenantId: string): Promise<WhatsappConnectionView> =>
   toView(await WhatsappInstance.findOne({ tenantId }));
+
+/**
+ * Whether Evolution already has the instance. A 404 means no; any other failure
+ * rethrows, so an unreachable provider never leads to a blind create.
+ */
+const instanceExists = async (
+  evolution: ReturnType<typeof getEvolutionClient>,
+  instanceName: string
+): Promise<boolean> => {
+  try {
+    await evolution.connectionState(instanceName);
+    return true;
+  } catch (error) {
+    if (error instanceof AppError && error.status === 404) return false;
+    throw error;
+  }
+};
 
 /**
  * Creates the tenant's Evolution instance on first use, then asks for a QR code.
@@ -45,8 +62,8 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
   ))!;
 
   if (!doc.providerCreated) {
-    // Only one connect creates at a time: a live lease held by another one makes this
-    // connect back off, and an expired lease (left by a crash) is taken over.
+    // Only one connect works on the instance at a time: a live lease held by another
+    // one makes this connect back off, and an expired lease (left by a crash) is taken over.
     const now = new Date();
     const leaseUntil = new Date(now.getTime() + CREATE_LEASE_MS);
     const lease = await WhatsappInstance.updateOne(
@@ -62,34 +79,23 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
     }
 
     try {
-      await evolution.createInstance({
-        instanceName: doc.instanceName,
-        webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${doc.instanceName}`,
-        webhookSecret
-      });
+      // Probe first: a previous create may have landed although its reply was lost.
+      if (!(await instanceExists(evolution, doc.instanceName))) {
+        await evolution.createInstance({
+          instanceName: doc.instanceName,
+          webhookUrl: `${baseUrl}/api/v1/whatsapp/webhook/${doc.instanceName}`,
+          webhookSecret
+        });
+      }
+      await WhatsappInstance.updateOne(
+        { _id: doc._id },
+        { $set: { providerCreated: true, leaseUntil: null } }
+      );
     } catch (error) {
-      // A lost reply (timeout, dropped connection) can hide a created instance. Probe it
-      // and adopt it only then. Other failures, such as "name in use", are not adopted:
-      // that instance may have been made elsewhere, without our webhook.
-      let exists = false;
-      if (error instanceof AppError && error.message === MESSAGES.unreachable) {
-        try {
-          await evolution.connectionState(doc.instanceName);
-          exists = true;
-        } catch {
-          exists = false;
-        }
-      }
-      if (!exists) {
-        // Only the lease this connect took is released, never a newer one.
-        await WhatsappInstance.updateOne({ _id: doc._id, leaseUntil }, { $set: { leaseUntil: null } });
-        throw error;
-      }
+      // Only the lease this connect took is released, never a newer one.
+      await WhatsappInstance.updateOne({ _id: doc._id, leaseUntil }, { $set: { leaseUntil: null } });
+      throw error;
     }
-    await WhatsappInstance.updateOne(
-      { _id: doc._id },
-      { $set: { providerCreated: true, leaseUntil: null } }
-    );
   }
 
   const payload = await evolution.connectInstance(doc.instanceName);
