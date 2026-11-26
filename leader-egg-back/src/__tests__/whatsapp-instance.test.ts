@@ -265,20 +265,40 @@ describe('whatsapp instance settings', () => {
     expect(res.body).toEqual({ state: 'open', qrCode: null });
   });
 
-  it('drops a stale QR once the line is disconnected, so the admin can ask for a new one', async () => {
+  it('drops a QR issued before the line disconnected, so the admin can ask for a new one', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
+    const now = Date.now();
     await WhatsappInstance.create({
       tenantId: tenant!._id,
       instanceName: `tenant-${tenant!.slug}`,
       providerCreated: true,
       state: 'close',
+      stateUpdatedAt: new Date(now),
       qrCode: QR,
-      qrUpdatedAt: new Date()
+      qrUpdatedAt: new Date(now - 60_000)
     });
 
     const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.body).toEqual({ state: 'close', qrCode: null });
+  });
+
+  it('shows a QR issued after the line disconnected, so a reconnect can be scanned', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const now = Date.now();
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'close',
+      stateUpdatedAt: new Date(now - 60_000),
+      qrCode: QR,
+      qrUpdatedAt: new Date(now)
+    });
+
+    const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.body).toEqual({ state: 'close', qrCode: QR });
   });
 
   it('keeps the connected line when the business admin is replaced', async () => {
