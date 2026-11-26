@@ -317,4 +317,23 @@ describe('whatsapp instance settings', () => {
     expect(connect.status).toBe(403);
     expect(evolution.createInstance).not.toHaveBeenCalled();
   });
+
+  it('reads only its own tenant line, never another business line', async () => {
+    const other = await Tenant.create({ name: 'Otro negocio', slug: 'otro-negocio', dbName: 'tenant_otro-negocio', active: true });
+    await WhatsappInstance.create({ tenantId: other._id, instanceName: 'tenant-otro-negocio', providerCreated: true, state: 'open' });
+
+    const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.body).toEqual({ state: 'not_created', qrCode: null });
+  });
+
+  it('answers a provider credentials failure with the fixed message only', async () => {
+    evolution.connectionState.mockRejectedValueOnce(new AppError(MESSAGES.unauthorized, 503));
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(res.body)).toContain(MESSAGES.unauthorized);
+    expect(JSON.stringify(res.body)).not.toMatch(/apikey|401/i);
+  });
 });

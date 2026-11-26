@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { startTestDatabase, stopTestDatabase } from './helpers.js';
-import { Tenant, WhatsappInstance } from '../tenancy/master-models.js';
+import { Types } from 'mongoose';
+import { Tenant, EmailIndex, WhatsappInstance } from '../tenancy/master-models.js';
+import { getTenantConnection } from '../tenancy/registry.js';
 import { deprovisionTenant } from '../tenancy/tenants.js';
 import { getEvolutionClient } from '../modules/whatsapp/evolution-client.js';
 import { AppError } from '../middleware/error-handler.js';
@@ -53,6 +55,18 @@ describe('deprovisionTenant and its WhatsApp line', () => {
 
     expect(await WhatsappInstance.countDocuments({ tenantId })).toBe(1);
     expect(await Tenant.findById(tenantId)).not.toBeNull();
+  });
+
+  it('leaves the tenant database and its email routing intact when Evolution refuses', async () => {
+    const tenantDb = getTenantConnection(`tenant_${slug}`).db!;
+    await tenantDb.collection('canary').insertOne({ ok: true });
+    await EmailIndex.create({ email: `owner-${slug}@test.com`, tenantId, userId: new Types.ObjectId() });
+    evolution.deleteInstance.mockRejectedValueOnce(new AppError('No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.', 503));
+
+    await expect(deprovision()).rejects.toMatchObject({ status: 503 });
+
+    expect(await tenantDb.collection('canary').countDocuments()).toBe(1);
+    expect(await EmailIndex.countDocuments({ tenantId })).toBe(1);
   });
 
   it('treats a line Evolution never created as already gone', async () => {
