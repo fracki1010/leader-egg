@@ -87,10 +87,15 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
           webhookSecret
         });
       }
-      await WhatsappInstance.updateOne(
+      const marked = await WhatsappInstance.updateOne(
         { _id: doc._id },
         { $set: { providerCreated: true, leaseUntil: null } }
       );
+      if (marked.matchedCount === 0) {
+        // The business was deleted while its line was being created: do not leave the line behind.
+        await evolution.deleteInstance(doc.instanceName);
+        throw new AppError('Negocio no encontrado', 404);
+      }
     } catch (error) {
       // Only the lease this connect took is released, never a newer one.
       await WhatsappInstance.updateOne({ _id: doc._id, leaseUntil }, { $set: { leaseUntil: null } });

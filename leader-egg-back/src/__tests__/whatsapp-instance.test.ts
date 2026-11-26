@@ -46,6 +46,7 @@ const evolution = {
   connectionState: vi.fn(async (): Promise<Record<string, unknown>> => {
     throw new AppError(MESSAGES.notFound, 404);
   }),
+  deleteInstance: vi.fn(async () => ({})),
   logoutInstance: vi.fn(),
   sendText: vi.fn(),
   getBase64FromMedia: vi.fn()
@@ -231,6 +232,22 @@ describe('whatsapp instance settings', () => {
     expect(evolution.createInstance).toHaveBeenCalledTimes(1);
     expect(await WhatsappInstance.countDocuments({})).toBe(1);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
+  });
+
+  it('removes the instance it created when its business was deleted meanwhile', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    evolution.createInstance.mockImplementationOnce(async () => {
+      // The business is deleted while its line is being created.
+      await WhatsappInstance.deleteMany({});
+      return {};
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(evolution.deleteInstance).toHaveBeenCalledWith(`tenant-${tenant!.slug}`);
+    expect(evolution.connectInstance).not.toHaveBeenCalled();
+    expect(await WhatsappInstance.countDocuments({})).toBe(0);
   });
 
   it('hides the QR once the line is open', async () => {

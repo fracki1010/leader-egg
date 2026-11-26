@@ -14,7 +14,7 @@ export const EVOLUTION_TIMEOUT_MS = 15_000;
 const WEBHOOK_EVENTS = ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'] as const;
 
 export const MESSAGES = {
-  unreachable: 'WhatsApp provider is unreachable',
+  unreachable: 'No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.',
   unauthorized: 'WhatsApp provider rejected the credentials',
   notFound: 'WhatsApp instance not found',
   busy: 'WhatsApp provider is busy, try again later',

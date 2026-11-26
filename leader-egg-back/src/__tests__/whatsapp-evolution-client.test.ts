@@ -102,7 +102,7 @@ describe('Evolution client', () => {
 
     expect(error).toBeInstanceOf(AppError);
     expect((error as AppError).status).toBe(503);
-    expect((error as AppError).message).toBe('WhatsApp provider is unreachable');
+    expect((error as AppError).message).toBe('No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.');
     expect((error as AppError).message).not.toContain(API_KEY);
   });
 
@@ -157,7 +157,7 @@ describe('Evolution client', () => {
 
     await expect(client(20).connectionState('tenant-acme')).rejects.toMatchObject({
       status: 503,
-      message: 'WhatsApp provider is unreachable'
+      message: 'No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.'
     });
   });
 
