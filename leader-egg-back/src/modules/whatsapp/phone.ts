@@ -21,6 +21,17 @@ const USER_DIGITS = /^\d{6,20}$/;
 const canonicalKey = (digits: string): string =>
   digits.startsWith('549') ? `54${digits.slice(3)}` : digits;
 
+/**
+ * Canonical key for a phone typed by a person ("+54 9 2622 517447", "54-2622-517447", …).
+ * Returns null unless the number carries the country code, because a bare local number
+ * has no reliable country and must not be stored as a link.
+ */
+export const canonicalPhoneKey = (input: string): string | null => {
+  const digits = input.replace(/[\s\-().]/g, '').replace(/^\+/, '');
+  if (!USER_DIGITS.test(digits) || !digits.startsWith('54')) return null;
+  return canonicalKey(digits);
+};
+
 const parseUserJid = (jid: string): WhatsappSender | null => {
   if (!jid.endsWith(USER_JID_SUFFIX)) return null;
 

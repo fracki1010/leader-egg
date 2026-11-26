@@ -13,6 +13,7 @@ import { EmailIndex } from '../../tenancy/master-models.js';
 import { getTenantConnection } from '../../tenancy/registry.js';
 import { getTenancy, runWithTenancy } from '../../tenancy/context.js';
 import { getTenantFromCache, refreshTenantCache, type TenantRecord } from '../../tenancy/tenants.js';
+import { removeUserWhatsappLinks } from '../whatsapp/team-phone.js';
 
 interface TokenPayload {
   userId: string;
@@ -277,6 +278,8 @@ export const deleteUser = async (id: string, currentUserId: string): Promise<voi
   }
 
   await user.deleteOne();
+  // A number linked to a deleted user must stop being answered as that user.
+  await removeUserWhatsappLinks(String(user._id));
   // Keep the platform-wide email index consistent with the tenant DB. Scope the
   // delete to the caller's tenant as defense in depth (the ALS context is set
   // by `authenticate` for every tenant route).

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { changePassword, deleteUser, getCurrentUser, listDrivers, listUsers, login, logout, register, updateUserRole } from './service.js';
 import { changePasswordSchema, loginSchema, registerSchema, updateUserRoleSchema } from './schema.js';
+import { whatsappPhonesByUser } from '../whatsapp/team-phone.js';
 import { AppError } from '../../middleware/error-handler.js';
 
 export const loginHandler = async (request: Request, response: Response, next: NextFunction): Promise<void> => {
@@ -132,6 +133,7 @@ export const listDriversHandler = async (_request: Request, response: Response, 
 export const listUsersHandler = async (_request: Request, response: Response, next: NextFunction): Promise<void> => {
   try {
     const users = await listUsers();
+    const phones = await whatsappPhonesByUser();
     response.status(200).json(
       users.map((user) => ({
         _id: user._id.toString(),
@@ -139,7 +141,8 @@ export const listUsersHandler = async (_request: Request, response: Response, ne
         email: user.email,
         role: user.role,
         permissions: user.permissions ?? [],
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        whatsappPhone: phones.get(user._id.toString()) ?? null
       }))
     );
   } catch (error) {

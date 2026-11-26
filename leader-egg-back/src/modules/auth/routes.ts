@@ -11,6 +11,7 @@ import {
   updateUserRoleHandler
 } from './controller.js';
 import { authenticate, authorize, requirePermission } from './middleware.js';
+import { setUserWhatsappPhoneHandler } from '../whatsapp/team-phone-controller.js';
 import { loginRateLimiter } from './rate-limit.js';
 
 export const authRouter = Router();
@@ -34,4 +35,5 @@ export const usersRouter = Router();
 usersRouter.get('/', authenticate, authorize('admin'), requirePermission('users.manage'), listUsersHandler);
 usersRouter.get('/drivers', authenticate, authorize('admin'), requirePermission('users.manage'), listDriversHandler);
 usersRouter.patch('/:id', authenticate, authorize('admin'), requirePermission('users.manage'), updateUserRoleHandler);
+usersRouter.put('/:id/whatsapp-phone', authenticate, authorize('admin'), requirePermission('users.manage'), setUserWhatsappPhoneHandler);
 usersRouter.delete('/:id', authenticate, authorize('admin'), requirePermission('users.manage'), deleteUserHandler);
