@@ -100,6 +100,19 @@ describe('WhatsApp webhook: authentication, routing and status events', () => {
     expect(instance?.lastEventAt).toBeInstanceOf(Date);
   });
 
+  it('keeps stateUpdatedAt when Evolution repeats the same state', async () => {
+    const before = new Date(Date.now() - 60_000);
+    await WhatsappInstance.updateOne({ instanceName: INSTANCE_NAME }, { $set: { state: 'connecting', stateUpdatedAt: before } });
+
+    await request
+      .post(WEBHOOK_PATH)
+      .set('x-webhook-secret', SECRET)
+      .send({ event: 'connection.update', instance: INSTANCE_NAME, data: { state: 'connecting' } });
+
+    const instance = await WhatsappInstance.findOne({ instanceName: INSTANCE_NAME });
+    expect(instance?.stateUpdatedAt.getTime()).toBe(before.getTime());
+  });
+
   it('stores QRCODE_UPDATED and clears it once the connection is open', async () => {
     await request
       .post(WEBHOOK_PATH)
