@@ -54,7 +54,10 @@ const instanceExists = async (
  */
 export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnectionView> => {
   const { WEBHOOK_SECRET: webhookSecret, WHATSAPP_WEBHOOK_BASE_URL: baseUrl } = env;
-  if (!webhookSecret || !baseUrl) throw new AppError('WhatsApp is not configured', 503);
+  // Without the flag the webhook is closed, so a line created now could never report back.
+  if (!env.WHATSAPP_ENABLED || !webhookSecret || !baseUrl) {
+    throw new AppError('WhatsApp is not configured', 503);
+  }
 
   const tenant = await Tenant.findById(tenantId);
   if (!tenant) throw new AppError('Negocio no encontrado', 404);

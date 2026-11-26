@@ -19,6 +19,7 @@ import { runWithTenancy } from '../tenancy/context.js';
 import { User } from '../modules/auth/model.js';
 import { getEvolutionClient, MESSAGES } from '../modules/whatsapp/evolution-client.js';
 import { AppError } from '../middleware/error-handler.js';
+import { env } from '../config/env.js';
 
 vi.mock('../modules/whatsapp/evolution-client.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../modules/whatsapp/evolution-client.js')>()),
@@ -30,6 +31,7 @@ vi.mock('../config/env.js', async (importOriginal) => {
     ...original,
     env: {
       ...original.env,
+      WHATSAPP_ENABLED: true,
       WEBHOOK_SECRET: 'x'.repeat(32),
       WHATSAPP_WEBHOOK_BASE_URL: 'https://api.example.test'
     }
@@ -372,6 +374,18 @@ describe('whatsapp instance settings', () => {
     expect(get.status).toBe(403);
     expect(connect.status).toBe(403);
     expect(evolution.createInstance).not.toHaveBeenCalled();
+  });
+
+  it('refuses to create a line while the WhatsApp feature is switched off', async () => {
+    env.WHATSAPP_ENABLED = false;
+    try {
+      const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(503);
+      expect(evolution.createInstance).not.toHaveBeenCalled();
+    } finally {
+      env.WHATSAPP_ENABLED = true;
+    }
   });
 
   it('reads only its own tenant line, never another business line', async () => {
