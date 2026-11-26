@@ -100,6 +100,21 @@ describe('WhatsApp webhook: authentication, routing and status events', () => {
     expect(instance?.lastEventAt).toBeInstanceOf(Date);
   });
 
+  it('clears a leftover QR when Evolution repeats the open state', async () => {
+    await WhatsappInstance.updateOne(
+      { instanceName: INSTANCE_NAME },
+      { $set: { state: 'open', qrCode: 'data:image/png;base64,LEFTOVER', qrUpdatedAt: new Date() } }
+    );
+
+    await request
+      .post(WEBHOOK_PATH)
+      .set('x-webhook-secret', SECRET)
+      .send({ event: 'connection.update', instance: INSTANCE_NAME, data: { state: 'open' } });
+
+    const instance = await WhatsappInstance.findOne({ instanceName: INSTANCE_NAME });
+    expect(instance?.qrCode).toBeNull();
+  });
+
   it('keeps stateUpdatedAt when Evolution repeats the same state', async () => {
     const before = new Date(Date.now() - 60_000);
     await WhatsappInstance.updateOne({ instanceName: INSTANCE_NAME }, { $set: { state: 'connecting', stateUpdatedAt: before } });

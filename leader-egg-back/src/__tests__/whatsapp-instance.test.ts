@@ -250,14 +250,16 @@ describe('whatsapp instance settings', () => {
     expect(await WhatsappInstance.countDocuments({})).toBe(0);
   });
 
-  it('hides the QR once the line is open', async () => {
+  it('hides the QR once the line is open, even when the QR is newer than the state change', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
+    const now = Date.now();
     await WhatsappInstance.create({
       tenantId: tenant!._id,
       instanceName: `tenant-${tenant!.slug}`,
       state: 'open',
+      stateUpdatedAt: new Date(now - 60_000),
       qrCode: QR,
-      qrUpdatedAt: new Date()
+      qrUpdatedAt: new Date(now)
     });
 
     const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
@@ -281,6 +283,24 @@ describe('whatsapp instance settings', () => {
     const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.body).toEqual({ state: 'close', qrCode: null });
+  });
+
+  it('keeps the QR while waiting for a scan, even if the state changed after it was issued', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const now = Date.now();
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'connecting',
+      stateUpdatedAt: new Date(now),
+      qrCode: QR,
+      qrUpdatedAt: new Date(now - 1000)
+    });
+
+    const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.body).toEqual({ state: 'connecting', qrCode: QR });
   });
 
   it('shows a QR issued after the line disconnected, so a reconnect can be scanned', async () => {

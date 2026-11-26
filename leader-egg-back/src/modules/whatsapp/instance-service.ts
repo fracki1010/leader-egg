@@ -19,12 +19,13 @@ export interface WhatsappConnectionView {
 
 const toView = (doc: IWhatsappInstance | null): WhatsappConnectionView => {
   if (!doc) return { state: 'not_created', qrCode: null };
-  // A QR is shown only if it was issued after the line last changed state: an older one is stale.
-  const fresh =
-    doc.state !== 'open' &&
-    doc.qrCode != null &&
-    (!doc.stateUpdatedAt || (doc.qrUpdatedAt != null && doc.qrUpdatedAt > doc.stateUpdatedAt));
-  return { state: doc.state, qrCode: fresh ? (doc.qrCode ?? null) : null };
+  // Waiting for a scan, the stored QR is the one the last connect issued, so it stays visible.
+  // After a disconnect it is shown only if it was issued after that change; an older one is stale.
+  const waitingForScan = doc.state === 'created' || doc.state === 'connecting';
+  const issuedAfterChange =
+    doc.qrUpdatedAt != null && (!doc.stateUpdatedAt || doc.qrUpdatedAt > doc.stateUpdatedAt);
+  const show = doc.qrCode != null && (waitingForScan || (doc.state !== 'open' && issuedAfterChange));
+  return { state: doc.state, qrCode: show ? (doc.qrCode ?? null) : null };
 };
 
 export const getWhatsappConnection = async (tenantId: string): Promise<WhatsappConnectionView> =>
