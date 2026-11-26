@@ -21,3 +21,11 @@
 - **Decision:** the owner approved `02-DOCS/wiki/sdd/specs/whatsapp-agent-turn.md` as written.
 - **Why:** the owner accepted the scope; the points to clarify stay open.
 - **Next:** `clarify` resolves the 7 points, then `plan`. No code before `plan`.
+
+## 2026-11-24 — WhatsApp line linking by QR: scope and deletion
+
+- **Decision:** the spec `02-DOCS/wiki/sdd/specs/whatsapp-qr-connect.md` is approved by the owner. Only admins link the line or see the QR code, from Settings. The QR renews by itself while Settings is open and stops when the screen closes.
+- **Decision:** deleting a business removes its WhatsApp line at the provider first. If the provider cannot remove it, the business is kept.
+- **Why:** a line left linked to a deleted business is invisible from the app. The owner authorised the deletion behaviour in chat on 2026-11-24.
+- **Source:** `02-DOCS/wiki/sdd/specs/whatsapp-qr-connect.md`.
+- **Open:** none blocking. The provider's delete endpoint and its 404 meaning are unverified against a live Evolution.
