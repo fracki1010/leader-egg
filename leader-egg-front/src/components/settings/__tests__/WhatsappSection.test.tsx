@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, act } from '@testing-library/react';
+import { screen, act, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '../../../test/render-with-providers.tsx';
 import { whatsappApi, type WhatsappConnection } from '../../../api/whatsapp.ts';
+import { ApiError } from '../../../api/client.ts';
 import { WhatsappSection } from '../WhatsappSection.tsx';
 
 vi.mock('../../../api/whatsapp.ts', () => ({
@@ -12,6 +13,7 @@ vi.mock('../../../api/whatsapp.ts', () => ({
 }));
 
 const getConnection = vi.mocked(whatsappApi.getConnection);
+const connect = vi.mocked(whatsappApi.connect);
 
 const connection = (overrides: Partial<WhatsappConnection>): WhatsappConnection => ({
   state: 'not_created',
@@ -91,5 +93,17 @@ describe('WhatsappSection', () => {
       await vi.advanceTimersByTimeAsync(15000);
     });
     expect(getConnection).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows only the server message when linking is unavailable, never provider details', async () => {
+    getConnection.mockResolvedValue(connection({ state: 'not_created' }));
+    connect.mockRejectedValueOnce(new ApiError('No se pudo vincular WhatsApp en este momento.', 503));
+
+    renderWithProviders(<WhatsappSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Conectar WhatsApp' }));
+
+    expect(await screen.findByText('No se pudo vincular WhatsApp en este momento.')).toBeTruthy();
+    expect(screen.queryByText(/evolution/i)).toBeNull();
+    expect(screen.queryByText(/apikey|api key/i)).toBeNull();
   });
 });
