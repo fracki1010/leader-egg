@@ -265,6 +265,22 @@ describe('whatsapp instance settings', () => {
     expect(res.body).toEqual({ state: 'open', qrCode: null });
   });
 
+  it('drops a stale QR once the line is disconnected, so the admin can ask for a new one', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'close',
+      qrCode: QR,
+      qrUpdatedAt: new Date()
+    });
+
+    const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.body).toEqual({ state: 'close', qrCode: null });
+  });
+
   it('keeps the connected line when the business admin is replaced', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
     await WhatsappInstance.create({

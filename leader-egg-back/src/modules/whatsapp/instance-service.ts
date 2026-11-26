@@ -19,7 +19,9 @@ export interface WhatsappConnectionView {
 
 const toView = (doc: IWhatsappInstance | null): WhatsappConnectionView => {
   if (!doc) return { state: 'not_created', qrCode: null };
-  return { state: doc.state, qrCode: doc.state === 'open' ? null : (doc.qrCode ?? null) };
+  // A QR is only valid while the line waits to be scanned; after a disconnect it is stale.
+  const scannable = doc.state === 'created' || doc.state === 'connecting';
+  return { state: doc.state, qrCode: scannable ? (doc.qrCode ?? null) : null };
 };
 
 export const getWhatsappConnection = async (tenantId: string): Promise<WhatsappConnectionView> =>
