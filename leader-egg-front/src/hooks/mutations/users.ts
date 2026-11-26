@@ -25,6 +25,15 @@ export function useUpdateUser() {
   });
 }
 
+export function useSetWhatsappPhone() {
+  const queryClient = useQueryClient();
+  return useOfflineAwareMutation({
+    mutationFn: ({ id, phone }: { id: string; phone: string | null }) =>
+      usersApi.setWhatsappPhone(id, phone),
+    onSuccess: () => invalidateDomains(queryClient, USER_DOMAINS),
+  });
+}
+
 export function useDeleteUser() {
   const queryClient = useQueryClient();
   return useOfflineAwareMutation({

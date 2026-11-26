@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
 import { useUsers } from '../hooks/queries/index.ts';
-import { useRegisterUser, useUpdateUser, useDeleteUser } from '../hooks/mutations/index.ts';
+import { useRegisterUser, useUpdateUser, useDeleteUser, useSetWhatsappPhone } from '../hooks/mutations/index.ts';
 import { PermissionsEditor } from '../components/users/PermissionsEditor.tsx';
 import {
   ALL_PERMISSIONS,
@@ -253,6 +253,8 @@ interface EditState {
   user: AppUser;
   role: UserRole;
   permissions: string[];
+  /** WhatsApp number as typed; empty clears the link. */
+  phone: string;
 }
 
 /** Default a fresh admin to the full permission set. */
@@ -744,9 +746,10 @@ export function UsersPage() {
   // Writes — offline-aware; each invalidates users (+ routes on role change).
   const registerUser = useRegisterUser();
   const updateUser = useUpdateUser();
+  const setWhatsappPhone = useSetWhatsappPhone();
   const deleteUser = useDeleteUser();
   const submitting = registerUser.isPending;
-  const editing = updateUser.isPending;
+  const editing = updateUser.isPending || setWhatsappPhone.isPending;
   const deleting = deleteUser.isPending;
 
   /* Real team KPI counts from the full list */
@@ -837,7 +840,12 @@ export function UsersPage() {
   /* ── Edit (role change) ─────────────────────── */
 
   const openEdit = (user: AppUser) => {
-    setEditState({ user, role: user.role, permissions: user.permissions ?? [] });
+    setEditState({
+      user,
+      role: user.role,
+      permissions: user.permissions ?? [],
+      phone: user.whatsappPhone ?? '',
+    });
     setEditError(null);
   };
 
@@ -861,6 +869,21 @@ export function UsersPage() {
     const newRole = editState.role;
     setEditError(null);
 
+    const phoneInput = editState.phone.trim();
+    const phoneChanged = phoneInput !== (target.whatsappPhone ?? '');
+
+    const finishEdit = () => {
+      setEditState(null);
+      if (target._id === currentUser?._id) {
+        void refreshSession();
+      }
+      setSnackbar({
+        open: true,
+        message: `Rol de ${target.name} actualizado a ${ROLE_PERMISSIONS[newRole].roleLabel}`,
+        severity: 'success',
+      });
+    };
+
     updateUser.mutate(
       {
         id: target._id,
@@ -871,15 +894,25 @@ export function UsersPage() {
       },
       {
         onSuccess: () => {
-          setEditState(null);
-          if (target._id === currentUser?._id) {
-            void refreshSession();
+          if (!phoneChanged) {
+            finishEdit();
+            return;
           }
-          setSnackbar({
-            open: true,
-            message: `Rol de ${target.name} actualizado a ${ROLE_PERMISSIONS[newRole].roleLabel}`,
-            severity: 'success',
-          });
+          // The role is saved; now the number. A failure keeps the dialog open to retry.
+          setWhatsappPhone.mutate(
+            { id: target._id, phone: phoneInput === '' ? null : phoneInput },
+            {
+              onSuccess: finishEdit,
+              onError: (err) => {
+                if (isOfflineQueuedError(err)) {
+                  setEditState(null);
+                  setSnackbar({ open: true, message: 'Cambio de número guardado (offline)', severity: 'success' });
+                  return;
+                }
+                setEditError(friendlyError(err instanceof Error ? err.message : 'Error al guardar el número de WhatsApp'));
+              },
+            },
+          );
         },
         onError: (err) => {
           if (isOfflineQueuedError(err)) {
@@ -1275,6 +1308,15 @@ export function UsersPage() {
               <MenuItem value="viewer">{ROLE_PERMISSIONS.viewer.selectLabel}</MenuItem>
               <MenuItem value="puesto">{ROLE_PERMISSIONS.puesto.selectLabel}</MenuItem>
             </MuiTextField>
+
+            <MuiTextField
+              label="Número de WhatsApp"
+              value={editState.phone}
+              onChange={(e) => setEditState({ ...editState, phone: e.target.value })}
+              placeholder="+54 9 2622 517447"
+              disabled={editing}
+              helperText="Con código de país. El asistente responde a este número como este usuario. Dejalo vacío para quitarlo."
+            />
 
             {editState.role === 'admin' ? (
               <PermissionsEditor

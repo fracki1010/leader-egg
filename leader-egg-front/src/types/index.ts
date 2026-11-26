@@ -936,6 +936,8 @@ export interface AppUser {
   createdAt: string;
   /** Per-module permissions (admins only). */
   permissions?: string[];
+  /** Canonical WhatsApp number the assistant answers as this user, or null. */
+  whatsappPhone?: string | null;
 }
 
 /** Body for PATCH /v1/users/:id — role and/or permissions (admin). */
