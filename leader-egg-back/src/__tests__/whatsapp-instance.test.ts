@@ -395,6 +395,22 @@ describe('whatsapp instance settings', () => {
     expect(res.body).toEqual({ state: 'connecting', qrCode: QR });
   });
 
+  it('never restarts a line that already gets a QR from Evolution', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'connecting'
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.qrCode).toBe(QR);
+    expect(evolution.restartInstance).not.toHaveBeenCalled();
+  });
+
   it('never restarts an open line, even when Evolution answers without a QR', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
     await WhatsappInstance.create({

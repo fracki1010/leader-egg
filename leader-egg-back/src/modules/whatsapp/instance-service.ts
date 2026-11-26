@@ -115,9 +115,13 @@ export const connectWhatsapp = async (tenantId: string): Promise<WhatsappConnect
   let payload = await evolution.connectInstance(doc.instanceName);
   // A stuck "connecting" instance answers without a QR; restarting it makes Evolution issue one.
   // Never restart an open line: that would unlink the phone.
-  if (typeof payload.base64 !== 'string' && doc.state !== 'open') {
-    await evolution.restartInstance(doc.instanceName);
-    payload = await evolution.connectInstance(doc.instanceName);
+  if (typeof payload.base64 !== 'string') {
+    // Re-read: the state may have turned open while the connect above was in flight.
+    const current = await WhatsappInstance.findById(doc._id);
+    if (current && current.state !== 'open') {
+      await evolution.restartInstance(doc.instanceName);
+      payload = await evolution.connectInstance(doc.instanceName);
+    }
   }
   if (typeof payload.base64 === 'string') {
     await WhatsappInstance.updateOne(
