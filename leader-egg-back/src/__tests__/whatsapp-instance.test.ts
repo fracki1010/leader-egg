@@ -395,6 +395,41 @@ describe('whatsapp instance settings', () => {
     expect(res.body).toEqual({ state: 'connecting', qrCode: QR });
   });
 
+  it('does not restart a line that turned open while the connect was in flight', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    const instanceName = `tenant-${tenant!.slug}`;
+    await WhatsappInstance.create({ tenantId: tenant!._id, instanceName, providerCreated: true, state: 'connecting' });
+    // The webhook reports open while Evolution answers without a QR.
+    evolution.connectInstance.mockImplementationOnce(async () => {
+      await WhatsappInstance.updateOne({ instanceName }, { $set: { state: 'open' } });
+      return {} as { base64: string };
+    });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.restartInstance).not.toHaveBeenCalled();
+  });
+
+  it('restarts at most once when Evolution keeps answering without a QR', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'connecting'
+    });
+    evolution.connectInstance
+      .mockResolvedValueOnce({} as { base64: string })
+      .mockResolvedValueOnce({} as { base64: string });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.restartInstance).toHaveBeenCalledTimes(1);
+    expect(evolution.connectInstance).toHaveBeenCalledTimes(2);
+  });
+
   it('never restarts a line that already gets a QR from Evolution', async () => {
     const tenant = await Tenant.findById(getTestTenantId());
     await WhatsappInstance.create({
