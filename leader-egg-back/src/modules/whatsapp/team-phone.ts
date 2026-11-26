@@ -25,21 +25,15 @@ export const setUserWhatsappPhone = async (userId: string, phone: string | null)
   const key = canonicalPhoneKey(phone);
   if (!key) throw new AppError(INVALID_PHONE, 400);
 
-  const holder = await WhatsappAllowedNumber.findOne({ phone: key });
-  if (holder && String(holder.userId) !== String(user._id)) {
-    throw new AppError(TAKEN_PHONE, 409);
-  }
-
   try {
-    await WhatsappAllowedNumber.updateOne(
-      { phone: key },
-      { $set: { userId: user._id } },
-      { upsert: true }
-    );
+    // Insert, never upsert: an upsert on { phone } would silently re-point a row another
+    // request just stored. The unique phone index is the only arbiter between racing saves.
+    await WhatsappAllowedNumber.create({ phone: key, userId: user._id });
   } catch (error) {
-    // Another request linked the same number between the check and the store.
-    if ((error as { code?: number }).code === DUPLICATE_KEY) throw new AppError(TAKEN_PHONE, 409);
-    throw error;
+    if ((error as { code?: number }).code !== DUPLICATE_KEY) throw error;
+    // The number exists: fine when it is already this user's (idempotent re-save), taken otherwise.
+    const holder = await WhatsappAllowedNumber.findOne({ phone: key });
+    if (!holder || String(holder.userId) !== String(user._id)) throw new AppError(TAKEN_PHONE, 409);
   }
 
   await WhatsappAllowedNumber.deleteMany({ userId: user._id, phone: { $ne: key } });

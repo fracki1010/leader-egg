@@ -92,11 +92,25 @@ describe('team WhatsApp phone link (admin sets a number on a user)', () => {
   it('AC4: clearing the number removes the link', async () => {
     await put(targetId, { phone: '542622517447' });
 
+    await inTenant(() =>
+      WhatsappAllowedNumber.create({ phone: '542622599999', userId: new Types.ObjectId(otherId) })
+    );
+
     const res = await put(targetId, { phone: null });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ phone: null });
     expect(await linkFor('542622517447')).toBeNull();
+    expect(String((await linkFor('542622599999'))?.userId)).toBe(otherId);
+  });
+
+  it('re-saving the same number for the same user is accepted and keeps the link', async () => {
+    await put(targetId, { phone: '542622517447' });
+
+    const res = await put(targetId, { phone: '+54 9 2622 517447' });
+
+    expect(res.status).toBe(200);
+    expect(String((await linkFor('542622517447'))?.userId)).toBe(targetId);
   });
 
   it('rejects a number without a country code and stores nothing', async () => {
@@ -140,9 +154,14 @@ describe('team WhatsApp phone link (admin sets a number on a user)', () => {
   it('AC7: deleting a user removes that user\'s number link', async () => {
     await put(targetId, { phone: '542622517447' });
 
+    await inTenant(() =>
+      WhatsappAllowedNumber.create({ phone: '542622599999', userId: new Types.ObjectId(otherId) })
+    );
+
     const res = await request.delete(`/api/v1/users/${targetId}`).set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(204);
     expect(await linkFor('542622517447')).toBeNull();
+    expect(String((await linkFor('542622599999'))?.userId)).toBe(otherId);
   });
 });
