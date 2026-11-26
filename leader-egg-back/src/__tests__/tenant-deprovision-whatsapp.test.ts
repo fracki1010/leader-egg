@@ -47,7 +47,7 @@ describe('deprovisionTenant and its WhatsApp line', () => {
   });
 
   it('keeps the tenant and its line when Evolution cannot delete the line', async () => {
-    evolution.deleteInstance.mockRejectedValueOnce(new AppError('WhatsApp provider is unreachable', 503));
+    evolution.deleteInstance.mockRejectedValueOnce(new AppError('No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.', 503));
 
     await expect(deprovision()).rejects.toMatchObject({ status: 503 });
 

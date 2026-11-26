@@ -125,6 +125,10 @@ describe('WhatsappSection', () => {
 
     const { unmount } = renderWithProviders(<WhatsappSection />);
     expect(await screen.findByAltText('Código QR de WhatsApp')).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(getConnection.mock.calls.length).toBeGreaterThan(1);
     unmount();
     const callsAtExit = getConnection.mock.calls.length;
 
