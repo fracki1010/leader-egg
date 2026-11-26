@@ -42,6 +42,7 @@ export interface EvolutionClient {
     webhookSecret: string;
   }): Promise<EvolutionPayload>;
   connectInstance(instanceName: string): Promise<EvolutionPayload>;
+  restartInstance(instanceName: string): Promise<EvolutionPayload>;
   connectionState(instanceName: string): Promise<EvolutionPayload>;
   logoutInstance(instanceName: string): Promise<EvolutionPayload>;
   deleteInstance(instanceName: string): Promise<EvolutionPayload>;
@@ -122,6 +123,7 @@ export const createEvolutionClient = (config: EvolutionClientConfig): EvolutionC
         }
       }),
     connectInstance: (instanceName) => request('GET', `/instance/connect/${instanceName}`),
+    restartInstance: (instanceName) => request('POST', `/instance/restart/${instanceName}`),
     connectionState: (instanceName) =>
       request('GET', `/instance/connectionState/${instanceName}`),
     logoutInstance: (instanceName) => request('DELETE', `/instance/logout/${instanceName}`),

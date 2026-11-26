@@ -49,6 +49,7 @@ const evolution = {
     throw new AppError(MESSAGES.notFound, 404);
   }),
   deleteInstance: vi.fn(async () => ({})),
+  restartInstance: vi.fn(async () => ({})),
   logoutInstance: vi.fn(),
   sendText: vi.fn(),
   getBase64FromMedia: vi.fn()
@@ -374,6 +375,41 @@ describe('whatsapp instance settings', () => {
     expect(get.status).toBe(403);
     expect(connect.status).toBe(403);
     expect(evolution.createInstance).not.toHaveBeenCalled();
+  });
+
+  it('restarts a stuck connecting line when Evolution answers without a QR, then returns the new QR', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'connecting'
+    });
+    // Evolution answers without a QR: the reply carries no base64.
+    evolution.connectInstance.mockResolvedValueOnce({} as { base64: string });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.restartInstance).toHaveBeenCalledWith(`tenant-${tenant!.slug}`);
+    expect(res.body).toEqual({ state: 'connecting', qrCode: QR });
+  });
+
+  it('never restarts an open line, even when Evolution answers without a QR', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'open'
+    });
+    // Evolution answers without a QR: the reply carries no base64.
+    evolution.connectInstance.mockResolvedValueOnce({} as { base64: string });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.restartInstance).not.toHaveBeenCalled();
   });
 
   it('refuses to create a line while the WhatsApp feature is switched off', async () => {
