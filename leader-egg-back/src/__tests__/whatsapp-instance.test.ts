@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import supertest from 'supertest';
+import bcrypt from 'bcrypt';
 import {
   startTestDatabase,
   stopTestDatabase,
@@ -7,8 +8,10 @@ import {
   seedAdminUser,
   seedDriverUser,
   loginAs,
-  getTestTenantId
+  getTestTenantId,
+  indexTestUser
 } from './helpers.js';
+import { DEFAULT_PERMISSIONS_BY_ROLE } from '../modules/auth/permissions.js';
 import { app } from '../app.js';
 import { Tenant, WhatsappInstance } from '../tenancy/master-models.js';
 import { getTenantConnection } from '../tenancy/registry.js';
@@ -243,6 +246,34 @@ describe('whatsapp instance settings', () => {
     const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.body).toEqual({ state: 'open', qrCode: null });
+  });
+
+  it('keeps the connected line when the business admin is replaced', async () => {
+    const tenant = await Tenant.findById(getTestTenantId());
+    await WhatsappInstance.create({
+      tenantId: tenant!._id,
+      instanceName: `tenant-${tenant!.slug}`,
+      providerCreated: true,
+      state: 'open'
+    });
+    const replacement = 'replacement@test.com';
+    const passwordHash = await bcrypt.hash('testpassword', 10);
+    const newAdmin = await User.create({
+      name: 'Replacement Admin',
+      email: replacement,
+      passwordHash,
+      role: 'admin',
+      permissions: [...DEFAULT_PERMISSIONS_BY_ROLE.admin]
+    });
+    await indexTestUser(replacement, newAdmin._id);
+    await User.deleteOne({ email: 'admin@test.com' });
+
+    const token = await loginAs(request, replacement, 'testpassword');
+    const res = await request.get('/api/v1/whatsapp/instance').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ state: 'open', qrCode: null });
+    expect(await WhatsappInstance.countDocuments({ tenantId: tenant!._id })).toBe(1);
   });
 
   it('refuses an admin who lacks config.manage', async () => {
