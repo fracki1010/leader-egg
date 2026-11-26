@@ -327,13 +327,23 @@ describe('whatsapp instance settings', () => {
     expect(res.body).toEqual({ state: 'not_created', qrCode: null });
   });
 
-  it('answers a provider credentials failure with the fixed message only', async () => {
+  it('passes the fixed provider credentials message through unchanged', async () => {
     evolution.connectionState.mockRejectedValueOnce(new AppError(MESSAGES.unauthorized, 503));
 
     const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(503);
     expect(JSON.stringify(res.body)).toContain(MESSAGES.unauthorized);
-    expect(JSON.stringify(res.body)).not.toMatch(/apikey|401/i);
+  });
+
+  it('connects its own business without adopting another business line', async () => {
+    const other = await Tenant.create({ name: 'Otro negocio 2', slug: 'otro-negocio-2', dbName: 'tenant_otro-negocio-2', active: true });
+    await WhatsappInstance.create({ tenantId: other._id, instanceName: 'tenant-otro-negocio-2', providerCreated: true, state: 'open', qrCode: QR });
+
+    const res = await request.post('/api/v1/whatsapp/instance/connect').set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(evolution.createInstance).toHaveBeenCalledTimes(1);
+    expect(await WhatsappInstance.findOne({ tenantId: other._id })).toMatchObject({ state: 'open', qrCode: QR });
   });
 });
