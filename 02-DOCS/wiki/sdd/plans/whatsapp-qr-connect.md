@@ -28,7 +28,7 @@ status: approved
 - **Personal data:** the phone number and QR payload are not written to logs. _Constitution §5.5._
 - **Access:** settings routes require `authenticate`, then `authorize('admin')`, then `requirePermission('config.manage')`, in that order. _Spec §What the user can do; existing `settingsGuard` in `routes.ts`._
 - **Provider timeout:** 15000 ms per call (`EVOLUTION_TIMEOUT_MS`). The creation lease is 60000 ms (`CREATE_LEASE_MS`). The timeout must stay below the lease.
-- **Error bodies:** fixed messages only (`MESSAGES` in `evolution-client.ts`): "WhatsApp provider is unreachable", "WhatsApp provider rejected the credentials", "WhatsApp instance not found", "WhatsApp provider is busy, try again later", "WhatsApp provider returned an error".
+- **Error bodies:** fixed messages only (`MESSAGES` in `evolution-client.ts`): "No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.", "WhatsApp provider rejected the credentials", "WhatsApp instance not found", "WhatsApp provider is busy, try again later", "WhatsApp provider returned an error".
 - **Accessibility:** WCAG 2.2 AA; the QR `<img>` has a non-empty `alt`; the status text is not conveyed by color alone. _Constitution §6._
 - **Document language:** Spanish UI copy in Settings; identifiers and code comments in English. _Constitution §6.1; project copy convention._
 - **Performance:** the entry JavaScript chunk stays within 184,320 bytes gzip. The QR component is loaded inside Settings, not the entry chunk. _Constitution §7.1._
