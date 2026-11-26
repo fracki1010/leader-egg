@@ -65,17 +65,13 @@ export const applyStatusEvent = async (
 
   if (delivery.event === 'CONNECTION_UPDATE') {
     const state = toInstanceState(data.state);
+    const clearQr = state === 'open' ? { qrCode: null, qrUpdatedAt: null } : {};
+    // Evolution repeats the same state every few seconds: only a real change moves stateUpdatedAt.
     await WhatsappInstance.updateOne(
-      { instanceName },
-      {
-        $set: {
-          state,
-          stateUpdatedAt: now,
-          lastEventAt: now,
-          ...(state === 'open' ? { qrCode: null, qrUpdatedAt: null } : {})
-        }
-      }
+      { instanceName, state: { $ne: state } },
+      { $set: { state, stateUpdatedAt: now, lastEventAt: now, ...clearQr } }
     );
+    await WhatsappInstance.updateOne({ instanceName }, { $set: { lastEventAt: now, ...clearQr } });
     return;
   }
 

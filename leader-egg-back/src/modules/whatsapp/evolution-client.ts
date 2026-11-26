@@ -13,8 +13,8 @@ export const EVOLUTION_TIMEOUT_MS = 15_000;
 
 const WEBHOOK_EVENTS = ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'] as const;
 
-const MESSAGES = {
-  unreachable: 'WhatsApp provider is unreachable',
+export const MESSAGES = {
+  unreachable: 'No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.',
   unauthorized: 'WhatsApp provider rejected the credentials',
   notFound: 'WhatsApp instance not found',
   busy: 'WhatsApp provider is busy, try again later',
@@ -42,8 +42,10 @@ export interface EvolutionClient {
     webhookSecret: string;
   }): Promise<EvolutionPayload>;
   connectInstance(instanceName: string): Promise<EvolutionPayload>;
+  restartInstance(instanceName: string): Promise<EvolutionPayload>;
   connectionState(instanceName: string): Promise<EvolutionPayload>;
   logoutInstance(instanceName: string): Promise<EvolutionPayload>;
+  deleteInstance(instanceName: string): Promise<EvolutionPayload>;
   sendText(instanceName: string, input: { number: string; text: string }): Promise<EvolutionPayload>;
   getBase64FromMedia(
     instanceName: string,
@@ -121,9 +123,11 @@ export const createEvolutionClient = (config: EvolutionClientConfig): EvolutionC
         }
       }),
     connectInstance: (instanceName) => request('GET', `/instance/connect/${instanceName}`),
+    restartInstance: (instanceName) => request('POST', `/instance/restart/${instanceName}`),
     connectionState: (instanceName) =>
       request('GET', `/instance/connectionState/${instanceName}`),
     logoutInstance: (instanceName) => request('DELETE', `/instance/logout/${instanceName}`),
+    deleteInstance: (instanceName) => request('DELETE', `/instance/delete/${instanceName}`),
     sendText: (instanceName, input) =>
       request('POST', `/message/sendText/${instanceName}`, input),
     getBase64FromMedia: (instanceName, key, convertToMp4 = false) =>
