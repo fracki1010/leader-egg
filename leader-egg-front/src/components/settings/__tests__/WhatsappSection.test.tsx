@@ -97,13 +97,40 @@ describe('WhatsappSection', () => {
 
   it('shows only the server message when linking is unavailable, never provider details', async () => {
     getConnection.mockResolvedValue(connection({ state: 'not_created' }));
-    connect.mockRejectedValueOnce(new ApiError('No se pudo vincular WhatsApp en este momento.', 503));
+    connect.mockRejectedValueOnce(
+      new ApiError('No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.', 503)
+    );
 
     renderWithProviders(<WhatsappSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Conectar WhatsApp' }));
 
-    expect(await screen.findByText('No se pudo vincular WhatsApp en este momento.')).toBeTruthy();
+    expect(
+      await screen.findByText('No se puede vincular WhatsApp ahora. Probá de nuevo en unos minutos.')
+    ).toBeTruthy();
     expect(screen.queryByText(/evolution/i)).toBeNull();
     expect(screen.queryByText(/apikey|api key/i)).toBeNull();
+  });
+
+  it('offers no connect action while the connection is still loading', () => {
+    getConnection.mockReturnValue(new Promise(() => {}));
+
+    renderWithProviders(<WhatsappSection />);
+
+    expect(screen.queryByRole('button', { name: 'Conectar WhatsApp' })).toBeNull();
+  });
+
+  it('stops polling once the admin leaves Settings', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    getConnection.mockResolvedValue(connection({ state: 'created', qrCode: 'QR_1' }));
+
+    const { unmount } = renderWithProviders(<WhatsappSection />);
+    expect(await screen.findByAltText('Código QR de WhatsApp')).toBeTruthy();
+    unmount();
+    const callsAtExit = getConnection.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    expect(getConnection).toHaveBeenCalledTimes(callsAtExit);
   });
 });
